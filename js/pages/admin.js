@@ -210,22 +210,37 @@ window.Yoru.Pages.Admin = {
                         
                         const fileId = match[1];
                         const exportUrl = `https://docs.google.com/document/export?format=txt&id=${fileId}`;
-                        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(exportUrl)}`;
                         
-                        try {
-                            const response = await fetch(proxyUrl);
-                            const data = await response.json();
-                            
-                            if (data.contents) {
-                                content = data.contents.replace(/^\uFEFF/, '').trim();
-                                window.Yoru.UI.toast('Google Docs text extracted!', 'success');
-                            } else {
-                                throw new Error("Could not read contents. Make sure 'Anyone with the link can view' is turned on in Google Docs.");
+                        const proxies = [
+                            `https://corsproxy.io/?${encodeURIComponent(exportUrl)}`,
+                            `https://api.allorigins.win/raw?url=${encodeURIComponent(exportUrl)}`,
+                            `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(exportUrl)}`
+                        ];
+                        
+                        let textData = null;
+                        let lastError = null;
+                        
+                        for (const proxyUrl of proxies) {
+                            try {
+                                const response = await fetch(proxyUrl);
+                                if (response.ok) {
+                                    textData = await response.text();
+                                    break; // Success!
+                                }
+                            } catch (err) {
+                                lastError = err;
+                                // Ignore and try next proxy
                             }
-                        } catch (err) {
+                        }
+                        
+                        if (textData) {
+                            content = textData.replace(/^\uFEFF/, '').trim();
+                            window.Yoru.UI.toast('Google Docs text extracted!', 'success');
+                        } else {
                             submitBtn.innerText = originalBtnText;
                             submitBtn.disabled = false;
-                            window.Yoru.UI.toast(err.message || 'Failed to extract text from Google Docs', 'error');
+                            window.Yoru.UI.toast('Failed to fetch via all proxies. Check link permissions.', 'error');
+                            console.error(lastError);
                             return; // Stop submission
                         }
                     }
