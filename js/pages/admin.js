@@ -193,11 +193,48 @@ window.Yoru.Pages.Admin = {
             addChapterForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
                 
+                const submitBtn = addChapterForm.querySelector('button[type="submit"]');
+                const originalBtnText = submitBtn.innerText;
+                
                 const novel_id = document.getElementById('chapter-novel-id').value.trim();
                 const id = document.getElementById('chapter-id').value.trim();
                 const title = document.getElementById('chapter-title').value.trim();
                 let content = document.getElementById('chapter-content').value.trim();
                 
+                // If user pasted a raw Google Docs link as the entire content, try to extract the text
+                if (content.startsWith('https://docs.google.com/document/d/')) {
+                    const match = content.match(/\/document\/d\/([a-zA-Z0-9_-]+)/);
+                    if (match && match[1]) {
+                        submitBtn.innerText = 'Extracting from Google Docs...';
+                        submitBtn.disabled = true;
+                        
+                        const fileId = match[1];
+                        const exportUrl = `https://docs.google.com/document/export?format=txt&id=${fileId}`;
+                        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(exportUrl)}`;
+                        
+                        try {
+                            const response = await fetch(proxyUrl);
+                            const data = await response.json();
+                            
+                            if (data.contents) {
+                                content = data.contents.replace(/^\uFEFF/, '').trim();
+                                window.Yoru.UI.toast('Google Docs text extracted!', 'success');
+                            } else {
+                                throw new Error("Could not read contents. Make sure 'Anyone with the link can view' is turned on in Google Docs.");
+                            }
+                        } catch (err) {
+                            submitBtn.innerText = originalBtnText;
+                            submitBtn.disabled = false;
+                            window.Yoru.UI.toast(err.message || 'Failed to extract text from Google Docs', 'error');
+                            return; // Stop submission
+                        }
+                    }
+                }
+                
+                submitBtn.innerText = 'Saving...';
+                submitBtn.disabled = true;
+                
+                // Process any markdown images that have Google Drive links
                 content = content.replace(/!\[(.*?)\]\((https:\/\/drive\.google\.com\/.*?)\)/g, function(match, alt, fullUrl) {
                     const driveIdMatch = fullUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || fullUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
                     if (driveIdMatch && driveIdMatch[1]) {
@@ -226,6 +263,9 @@ window.Yoru.Pages.Admin = {
                     } else {
                         alert('Error saving chapter: ' + error.message);
                     }
+                } finally {
+                    submitBtn.innerText = originalBtnText;
+                    submitBtn.disabled = false;
                 }
             });
         }

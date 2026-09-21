@@ -38,27 +38,16 @@ Yoru.Pages.Reader = {
     var prevChapter = chapterIndex > 0 ? novel.chapters[chapterIndex - 1] : null;
     var nextChapter = chapterIndex < novel.chapters.length - 1 ? novel.chapters[chapterIndex + 1] : null;
 
-    var paragraphs = '';
-    const contentTrimmed = chapter.content.trim();
-    if (contentTrimmed.startsWith('https://docs.google.com/document/d/')) {
-      let docUrl = contentTrimmed;
-      if (docUrl.includes('/edit')) {
-          docUrl = docUrl.replace(/\/edit.*$/, '/preview');
-      } else if (!docUrl.endsWith('/preview') && !docUrl.includes('/pub')) {
-          docUrl = docUrl + '/preview';
+    // Convert content newlines to paragraphs
+    var paragraphs = chapter.content.split('\n').filter(p => p.trim() !== '').map(function(p) {
+      let text = p.trim();
+      let imgRegex = /^!\[(.*?)\]\((.*?)\)$/;
+      let match = text.match(imgRegex);
+      if (match) {
+        return `<img src="${match[2]}" alt="${match[1]}" class="reader-inline-image" style="max-width: 100%; border-radius: 8px; margin: 2rem auto; display: block;">`;
       }
-      paragraphs = `<div class="gdocs-container" style="background: white; padding: 10px; border-radius: 8px; margin: 2rem 0;"><iframe src="${docUrl}" width="100%" height="800px" style="border: none; border-radius: 4px;"></iframe></div>`;
-    } else {
-      paragraphs = chapter.content.split('\n').filter(p => p.trim() !== '').map(function(p) {
-        let text = p.trim();
-        let imgRegex = /^!\[(.*?)\]\((.*?)\)$/;
-        let match = text.match(imgRegex);
-        if (match) {
-          return `<img src="${match[2]}" alt="${match[1]}" class="reader-inline-image" style="max-width: 100%; border-radius: 8px; margin: 2rem auto; display: block;">`;
-        }
-        return '<p>' + text + '</p>';
-      }).join('');
-    }
+      return '<p>' + text + '</p>';
+    }).join('');
 
     return `
       <!-- Reading Progress Bar -->
