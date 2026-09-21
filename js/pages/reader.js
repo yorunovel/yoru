@@ -11,8 +11,8 @@ Yoru.Pages.Reader = {
   minFontSize: 14,
   maxFontSize: 28,
 
-  render: function(novelId, chapterId) {
-    var novel = Yoru.getNovelById(novelId);
+  render: async function(novelId, chapterId) {
+    var novel = await Yoru.getNovelById(novelId);
     if (!novel) {
       return `
         <div class="reader-page">
@@ -23,7 +23,7 @@ Yoru.Pages.Reader = {
       `;
     }
 
-    var chapter = Yoru.getChapter(novelId, chapterId);
+    var chapter = await Yoru.getChapter(novelId, chapterId);
     if (!chapter) {
       return `
         <div class="reader-page">
@@ -72,8 +72,13 @@ Yoru.Pages.Reader = {
             <p class="reader-novel-title">${novel.title}</p>
             <h1 class="reader-chapter-heading">${chapter.title}</h1>
           </div>
-          <div class="reader-content" id="reader-content" style="font-size: ${Yoru.Pages.Reader.fontSize}px;">
+          <div class="reader-content no-select" id="reader-content" style="font-size: ${Yoru.Pages.Reader.fontSize}px;">
             ${paragraphs}
+          </div>
+          
+          <!-- Comments Section -->
+          <div style="margin-top: 64px; padding-bottom: 64px;">
+            ${window.Yoru.UI.renderCommentsSection ? window.Yoru.UI.renderCommentsSection(novel.id, chapter.id) : ''}
           </div>
         </div>
 
@@ -145,8 +150,44 @@ Yoru.Pages.Reader = {
     updateProgress();
   },
 
-  afterRender: function() {
+  setupAntiCopy: function() {
+    var contentEl = document.getElementById('reader-content');
+    if (!contentEl) return;
+    
+    // Prevent right click
+    contentEl.addEventListener('contextmenu', function(e) {
+      e.preventDefault();
+      Yoru.UI.toast('Copying content is disabled.', 'error');
+    });
+    
+    // Prevent copying
+    contentEl.addEventListener('copy', function(e) {
+      e.preventDefault();
+      Yoru.UI.toast('Copying content is disabled.', 'error');
+    });
+    
+    // Prevent keyboard shortcuts (Ctrl+C, Ctrl+A)
+    document.addEventListener('keydown', function(e) {
+      // Only protect if we are on the reader page
+      if (document.getElementById('reader-page')) {
+        if (e.ctrlKey || e.metaKey) {
+          if (e.key === 'c' || e.key === 'C' || e.key === 'a' || e.key === 'A') {
+            e.preventDefault();
+            Yoru.UI.toast('Copying content is disabled.', 'error');
+          }
+        }
+      }
+    });
+  },
+
+  afterRender: function(params) {
     window.scrollTo(0, 0);
     Yoru.Pages.Reader.setupScrollProgress();
+    Yoru.Pages.Reader.setupAntiCopy();
+    
+    // Load comments
+    if (window.Yoru.loadComments && params && params.novelId && params.chapterId) {
+      window.Yoru.loadComments(params.novelId, params.chapterId);
+    }
   }
 };

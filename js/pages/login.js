@@ -84,18 +84,15 @@ Yoru.Pages.Login = {
     submitBtn.disabled = true;
     submitBtn.textContent = 'Verifying...';
 
-    // Simulate a brief delay for realism
-    setTimeout(function() {
-      var user = Yoru.users.find(function(u) {
-        return u.username === username && u.password === password;
-      });
-
-      if (user) {
+    // Simulate a brief delay for realism (or just wait for auth)
+    Yoru.auth.login(username, password)
+      .then(function(data) {
         // Successful login
-        Yoru.auth.login(user);
         Yoru.router.navigate('/dashboard');
-      } else {
+      })
+      .catch(function(error) {
         // Failed login
+        errorEl.textContent = 'Access denied. ' + (error.message || 'Invalid credentials.');
         errorEl.classList.add('visible');
         submitBtn.disabled = false;
         submitBtn.textContent = 'Enter';
@@ -105,8 +102,7 @@ Yoru.Pages.Login = {
         card.style.animation = 'none';
         card.offsetHeight; // Force reflow
         card.style.animation = 'shake 0.4s ease';
-      }
-    }, 600);
+      });
   },
 
   afterRender: function() {

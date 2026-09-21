@@ -7,27 +7,69 @@ window.Yoru = window.Yoru || {};
 
 // ===== AUTHENTICATION =====
 Yoru.auth = {
-  login: function(user) {
-    sessionStorage.setItem('yoru_user', JSON.stringify({
-      username: user.username,
-      role: user.role,
-      loginTime: Date.now()
-    }));
+  // Login now uses Supabase Auth with email/password.
+  // We simulate username login by appending @yoru.app to the username.
+  login: async function(username, password) {
+    const email = username + '@yoru.app';
+    const { data, error } = await Yoru.supabase.auth.signInWithPassword({
+      email: email,
+      password: password
+    });
+    
+    if (error) {
+      throw error;
+    }
+    
+    return data;
   },
 
-  logout: function() {
-    sessionStorage.removeItem('yoru_user');
+  logout: async function() {
+    await Yoru.supabase.auth.signOut();
+    Yoru.currentUser = null;
     Yoru.router.navigate('/login');
     Yoru.UI.toast('You have exited. Until next time.', 'default');
   },
 
   isAuthenticated: function() {
-    return sessionStorage.getItem('yoru_user') !== null;
+    return !!Yoru.currentUser;
   },
 
   getUser: function() {
-    var data = sessionStorage.getItem('yoru_user');
-    return data ? JSON.parse(data) : null;
+    return Yoru.currentUser;
+  },
+  
+  // Fetches the current session and loads profile data
+  initAuth: async function() {
+    const { data: { session } } = await Yoru.supabase.auth.getSession();
+    if (session && session.user) {
+      await Yoru.auth.loadUserProfile(session.user.id);
+    } else {
+      Yoru.currentUser = null;
+    }
+    
+    // Listen for auth changes
+    Yoru.supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        await Yoru.auth.loadUserProfile(session.user.id);
+      } else if (event === 'SIGNED_OUT') {
+        Yoru.currentUser = null;
+      }
+    });
+  },
+  
+  loadUserProfile: async function(userId) {
+    const { data, error } = await Yoru.supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+      
+    if (data) {
+      Yoru.currentUser = data;
+    } else {
+      // Fallback if profile doesn't exist yet
+      Yoru.currentUser = { id: userId, username: 'User', role: 'reader' };
+    }
   }
 };
 
@@ -43,12 +85,11 @@ Yoru.router = {
     if (parts.length === 0) return { route: 'login', params: {} };
 
     // Match routes
-    if (parts[0] === 'login') {
-      return { route: 'login', params: {} };
-    }
-    if (parts[0] === 'dashboard') {
-      return { route: 'dashboard', params: {} };
-    }
+    if (parts[0] === 'login') return { route: 'login', params: {} };
+    if (parts[0] === 'dashboard') return { route: 'dashboard', params: {} };
+    if (parts[0] === 'contact') return { route: 'contact', params: {} };
+    if (parts[0] === 'profile') return { route: 'profile', params: {} };
+    if (parts[0] === 'admin') return { route: 'admin', params: {} };
     if (parts[0] === 'novel' && parts[1]) {
       return { route: 'novel', params: { novelId: parts[1] } };
     }
@@ -80,33 +121,67 @@ Yoru.router = {
       Yoru.router.navigate('/dashboard');
       return;
     }
+    
+    // Admin guard
+    if (route === 'admin') {
+      const user = Yoru.auth.getUser();
+      if (!user || user.role !== 'admin') {
+        Yoru.router.navigate('/dashboard');
+        Yoru.UI.toast('Access denied.', 'error');
+        return;
+      }
+    }
 
     var html = '';
     var afterRender = null;
+    
+    // Support async rendering since we fetch data from Supabase
+    var renderPromise = null;
 
     switch (route) {
       case 'login':
-        html = Yoru.Pages.Login.render();
+        renderPromise = Promise.resolve(Yoru.Pages.Login.render());
         afterRender = Yoru.Pages.Login.afterRender;
         break;
 
       case 'dashboard':
-        html = Yoru.Pages.Dashboard.render();
+        renderPromise = Yoru.Pages.Dashboard.render();
         afterRender = Yoru.Pages.Dashboard.afterRender;
         break;
 
       case 'novel':
-        html = Yoru.Pages.Novel.render(params.novelId);
+        renderPromise = Yoru.Pages.Novel.render(params.novelId);
         afterRender = Yoru.Pages.Novel.afterRender;
         break;
 
       case 'reader':
-        html = Yoru.Pages.Reader.render(params.novelId, params.chapterId);
+        renderPromise = Yoru.Pages.Reader.render(params.novelId, params.chapterId);
         afterRender = Yoru.Pages.Reader.afterRender;
+        break;
+        
+      case 'contact':
+        if(Yoru.Pages.Contact) {
+          renderPromise = Promise.resolve(Yoru.Pages.Contact.render());
+          afterRender = Yoru.Pages.Contact.afterRender;
+        }
+        break;
+        
+      case 'profile':
+        if(Yoru.Pages.Profile) {
+          renderPromise = Promise.resolve(Yoru.Pages.Profile.render());
+          afterRender = Yoru.Pages.Profile.afterRender;
+        }
+        break;
+        
+      case 'admin':
+        if(Yoru.Pages.Admin) {
+          renderPromise = Promise.resolve(Yoru.Pages.Admin.render());
+          afterRender = Yoru.Pages.Admin.afterRender;
+        }
         break;
 
       default:
-        html = Yoru.Pages.Login.render();
+        renderPromise = Promise.resolve(Yoru.Pages.Login.render());
         afterRender = Yoru.Pages.Login.afterRender;
     }
 
@@ -114,20 +189,37 @@ Yoru.router = {
     app.style.opacity = '0';
     app.style.transition = 'opacity 0.15s ease';
 
-    setTimeout(function() {
-      app.innerHTML = html;
-      app.style.opacity = '1';
+    renderPromise.then(function(resolvedHtml) {
+      setTimeout(function() {
+        app.innerHTML = resolvedHtml;
+        app.style.opacity = '1';
 
-      // Execute afterRender callback
-      if (typeof afterRender === 'function') {
-        afterRender();
-      }
-    }, 150);
+        // Execute afterRender callback
+        if (typeof afterRender === 'function') {
+          afterRender(params);
+        }
+      }, 150);
+    }).catch(function(error) {
+      console.error('Render error:', error);
+      setTimeout(function() {
+        app.innerHTML = Yoru.UI.renderEmptyState('Failed to load page. ' + error.message);
+        app.style.opacity = '1';
+      }, 150);
+    });
   }
 };
 
 // ===== INITIALIZATION =====
-(function() {
+(async function() {
+  // Wait for Supabase to initialize auth before routing
+  try {
+    if (Yoru.auth.initAuth) {
+      await Yoru.auth.initAuth();
+    }
+  } catch(e) {
+    console.error("Auth init failed:", e);
+  }
+
   // Listen for hash changes
   window.addEventListener('hashchange', Yoru.router.handleRoute);
 

@@ -9,9 +9,9 @@ Yoru.Pages = Yoru.Pages || {};
 Yoru.Pages.Dashboard = {
   currentFilter: 'All',
 
-  render: function() {
+  render: async function() {
     var filter = Yoru.Pages.Dashboard.currentFilter;
-    var novels = Yoru.getNovelsByAuthor(filter);
+    var novels = await Yoru.getNovelsByAuthor(filter);
 
     var cardsHtml = '';
     if (novels.length === 0) {
@@ -48,22 +48,22 @@ Yoru.Pages.Dashboard = {
     `;
   },
 
-  filter: function(author) {
+  filter: async function(author) {
     Yoru.Pages.Dashboard.currentFilter = author;
     // Re-render just the grid and filter bar for smooth transition
     var grid = document.getElementById('novel-grid');
     var filterBar = document.getElementById('filter-bar');
 
     if (grid && filterBar) {
-      var novels = Yoru.getNovelsByAuthor(author);
-
-      // Update filter pills
-      filterBar.innerHTML = Yoru.UI.renderFilterPills(author);
-
       // Fade out grid
       grid.style.opacity = '0';
       grid.style.transform = 'translateY(10px)';
       grid.style.transition = 'all 0.25s ease';
+
+      var novels = await Yoru.getNovelsByAuthor(author);
+
+      // Update filter pills
+      filterBar.innerHTML = Yoru.UI.renderFilterPills(author);
 
       setTimeout(function() {
         if (novels.length === 0) {

@@ -1,291 +1,161 @@
 /* ================================================================
-   YORU — Data Layer
-   Mock data for novels, chapters, and user accounts
+   YORU — Data Layer (Supabase Integration)
+   Handles all data fetching and mutation
    ================================================================ */
 
 window.Yoru = window.Yoru || {};
 
-// ===== USER ACCOUNTS (invite-only, admin-managed) =====
-Yoru.users = [
-  { username: 'admin', password: 'yoru2024', role: 'admin' },
-  { username: 'reader', password: 'nightfall', role: 'reader' }
-];
+// ===== QUERY HELPERS (Async) =====
+
+Yoru.getNovelById = async function(id) {
+  const { data, error } = await Yoru.supabase
+    .from('novels')
+    .select('*, chapters(*)')
+    .eq('id', id)
+    .single();
+    
+  if (error || !data) return null;
+  
+  // Sort chapters
+  if (data.chapters) {
+    data.chapters.sort((a, b) => a.order_index - b.order_index);
+  } else {
+    data.chapters = [];
+  }
+  
+  // Handle cover formatting
+  if (!data.cover) {
+    data.cover = {
+      image: data.cover_image,
+      gradient: data.cover_gradient,
+      accent: data.cover_accent
+    };
+  }
+  
+  return data;
+};
+
+Yoru.getNovelsByAuthor = async function(author) {
+  let query = Yoru.supabase.from('novels').select('*, chapters(id)');
+  
+  if (author && author !== 'All') {
+    query = query.eq('author', author);
+  }
+  
+  const { data, error } = await query.order('order_index', { ascending: true });
+  if (error || !data) return [];
+  
+  return data.map(novel => {
+    if (!novel.cover) {
+      novel.cover = {
+        image: novel.cover_image,
+        gradient: novel.cover_gradient,
+        accent: novel.cover_accent
+      };
+    }
+    return novel;
+  });
+};
+
+Yoru.getChapter = async function(novelId, chapterId) {
+  const { data, error } = await Yoru.supabase
+    .from('chapters')
+    .select('*')
+    .eq('novel_id', novelId)
+    .eq('id', chapterId)
+    .single();
+    
+  if (error || !data) return null;
+  return data;
+};
+
+Yoru.getChapterIndex = function(novel, chapterId) {
+  if (!novel || !novel.chapters) return -1;
+  return novel.chapters.findIndex(function(ch) { return ch.id === chapterId; });
+};
+
+// Likes System
+Yoru.toggleLike = async function(novelId) {
+  const user = Yoru.auth.getUser();
+  if (!user) return false;
+  
+  // Check if liked
+  const { data: existing } = await Yoru.supabase
+    .from('likes')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('novel_id', novelId)
+    .single();
+    
+  if (existing) {
+    await Yoru.supabase.from('likes').delete().eq('id', existing.id);
+    return false; // Unliked
+  } else {
+    await Yoru.supabase.from('likes').insert([{ user_id: user.id, novel_id: novelId }]);
+    return true; // Liked
+  }
+};
+
+Yoru.getLikeCount = async function(novelId) {
+  const { count } = await Yoru.supabase
+    .from('likes')
+    .select('*', { count: 'exact', head: true })
+    .eq('novel_id', novelId);
+  return count || 0;
+};
+
+Yoru.hasUserLiked = async function(novelId) {
+  const user = Yoru.auth.getUser();
+  if (!user) return false;
+  
+  const { data } = await Yoru.supabase
+    .from('likes')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('novel_id', novelId)
+    .single();
+    
+  return !!data;
+};
+
+Yoru.authors = ['Sawp', 'Hofuku', 'Kuuhaku'];
 
 // ===== COVER GRADIENT THEMES =====
 const coverThemes = {
   crimsonVeil: {
-    gradient: 'linear-gradient(160deg, #1a0000 0%, #3d0c0c 30%, #6b1515 60%, #2a0505 100%)',
-    accent: 'rgba(196, 30, 58, 0.15)',
+    gradient: 'linear-gradient(135deg, #110808 0%, #2a0a0a 50%, #4a1010 100%)',
+    accent: 'rgba(196, 30, 58, 0.2)',
     image: 'assets/crimson_veil.jpg'
   },
   beneathSilk: {
-    gradient: 'linear-gradient(160deg, #1a0d1e 0%, #2d1535 30%, #4a1942 60%, #1a0a1f 100%)',
-    accent: 'rgba(180, 60, 160, 0.12)',
+    gradient: 'linear-gradient(135deg, #0a0505 0%, #1a0815 50%, #2d1024 100%)',
+    accent: 'rgba(150, 40, 100, 0.2)',
     image: 'assets/beneath_silk.jpg'
   },
   obsidianChains: {
-    gradient: 'linear-gradient(160deg, #0a0e1a 0%, #151d33 30%, #1e2d4d 60%, #0a0d18 100%)',
-    accent: 'rgba(60, 100, 180, 0.12)',
+    gradient: 'linear-gradient(135deg, #050505 0%, #151515 50%, #252525 100%)',
+    accent: 'rgba(255, 255, 255, 0.1)',
     image: 'assets/obsidian_chains.jpg'
   },
   hollowGarden: {
-    gradient: 'linear-gradient(160deg, #0a1a0d 0%, #0f2a15 30%, #1a3d22 60%, #081208 100%)',
-    accent: 'rgba(40, 140, 60, 0.1)',
+    gradient: 'linear-gradient(135deg, #050a05 0%, #0a1a0f 50%, #122c1b 100%)',
+    accent: 'rgba(40, 120, 70, 0.15)',
     image: 'assets/hollow_garden.jpg'
   },
   voidBetween: {
-    gradient: 'linear-gradient(160deg, #0d0a1e 0%, #1a1235 30%, #2a1d55 60%, #0c0818 100%)',
-    accent: 'rgba(100, 60, 200, 0.12)',
+    gradient: 'linear-gradient(135deg, #05050a 0%, #0c0e1c 50%, #151a30 100%)',
+    accent: 'rgba(50, 70, 150, 0.2)',
     image: 'assets/void_between.jpg'
   },
   whiteNoise: {
-    gradient: 'linear-gradient(160deg, #161616 0%, #1e1e1e 30%, #2a2a2a 60%, #121212 100%)',
-    accent: 'rgba(200, 200, 200, 0.06)',
+    gradient: 'linear-gradient(135deg, #111 0%, #222 50%, #333 100%)',
+    accent: 'rgba(200, 200, 200, 0.15)',
     image: 'assets/white_noise.jpg'
   },
   silentEmber: {
-    gradient: 'linear-gradient(160deg, #1a0f05 0%, #2d1a08 30%, #4a2a0d 60%, #1a0e04 100%)',
-    accent: 'rgba(200, 120, 40, 0.12)',
+    gradient: 'linear-gradient(135deg, #0a0500 0%, #1a0d00 50%, #2d1800 100%)',
+    accent: 'rgba(200, 100, 20, 0.15)',
     image: 'assets/silent_ember.jpg'
   }
 };
-
-// ===== NOVELS =====
-Yoru.novels = [
-  // ── Sawp ──────────────────────────────────────
-  {
-    id: 'crimson-veil',
-    title: 'Crimson Veil',
-    author: 'Sawp',
-    genre: ['Dark Romance', 'Psychological', 'Drama'],
-    cover: coverThemes.crimsonVeil,
-    synopsis: 'In the candlelit halls of the Société Écarlate, masks are not disguises — they are permissions. Behind them, the city\'s most powerful figures shed their public selves and surrender to desires that daylight forbids. When Isolde Maren, a disgraced journalist seeking one last story, infiltrates the society under a borrowed invitation, she expects corruption and scandal. What she finds instead is Damien Ashford — the society\'s enigmatic Keeper of Rites, a man whose voice alone feels like a confession. Drawn into a world where every touch is a transaction and every whisper carries weight, Isolde must decide how much of herself she is willing to lose to uncover the truth — and whether the truth is worth more than what she has found in the dark.',
-    chapters: [
-      {
-        id: 'ch1',
-        title: 'The Borrowed Mask',
-        content: `The invitation arrived in a black envelope, sealed with wax the color of arterial blood. No return address. No name. Just a date, a location, and a single instruction embossed in gold foil: "Come as no one."\n\nIsolde turned the card between her fingers, watching the candlelight catch the metallic lettering. Three months since the Herald had let her go. Three months of silence, of unanswered calls, of watching her byline disappear from the digital archives as though she had never existed. The envelope smelled faintly of bergamot and smoke, an olfactory signature that felt deliberately intimate.\n\nShe pressed the card to her lips, thinking. The Société Écarlate was rumor made flesh — whispered about in editorial back-channels and dismissed in the same breath. A secret society for the powerful, the beautiful, and the damned. If even half the stories were true, this single evening could rebuild everything she had lost. If they were false, she would have wasted nothing but a night she would have spent staring at the ceiling anyway.\n\n"Come as no one," she murmured. That, at least, would not require a disguise.`
-      },
-      {
-        id: 'ch2',
-        title: 'The Keeper of Rites',
-        content: `The ballroom existed in a state of permanent twilight. Candelabras lined the walls at precise intervals, their flames reflected in mirrors that had been deliberately aged — the glass foxed and darkened so that every reflection appeared as a memory rather than reality. The effect was disorienting. Isolde felt as though she were walking through a daguerreotype that someone had set in motion.\n\nShe had expected excess. Champagne towers and exposed skin, the performative decadence of people who confused transgression with originality. Instead, the room held a calibrated stillness. Perhaps forty people moved through the space, each masked, each dressed in variations of black and deep crimson. They spoke in low voices. No laughter. No music. The only sound was the rustle of fabric and the occasional clink of crystal against crystal.\n\n"You hold your glass like someone who expects to leave in a hurry."\n\nThe voice came from her left. Low, unhurried, carrying the particular weight of someone accustomed to being listened to. She turned and found him standing just outside the circle of the nearest candelabra — tall, dark-haired, his mask a simple thing of black lacquer that covered his eyes and the bridge of his nose. Below it, his mouth held the faintest suggestion of amusement.\n\n"And you watch people like someone who rarely speaks to them," she replied, surprised by her own steadiness.`
-      },
-      {
-        id: 'ch3',
-        title: 'The Weight of Silk',
-        content: `Damien Ashford did not exist on paper. This was the first thing Isolde confirmed when she returned to her apartment at four in the morning, still wearing the borrowed mask, her skin carrying the phantom warmth of his proximity. She searched every database she could access — public records, professional registries, social media platforms, even the dark corners of the web where information went to be sold rather than shared. Nothing.\n\nA man without a digital footprint in the twenty-first century was either a ghost or a construction. Both possibilities fascinated her. She set her recorder on the desk and played back the evening — not the conversations, which she had been too careful to capture, but her own whispered observations, narrated into the device during her cab ride home.\n\n"The Keeper of Rites — that's what they called him. Not a title of authority so much as custodianship. He opened the evening with a recitation. Not a speech. Something older, more personal, delivered from memory in a voice that made the room contract around him. The words were about permission. About the difference between wanting and allowing yourself to want. Forty people stood absolutely still while he spoke."  \n\nShe pressed pause and stared at the ceiling. She could still hear his voice, threading through the memory like smoke through silk. This was dangerous territory — not the story, but the way it had already begun to feel less like investigation and more like invitation.`
-      },
-      {
-        id: 'ch4',
-        title: 'The Rules of Engagement',
-        content: `The second envelope arrived exactly one week later, identical to the first except for the wax seal, which bore a different symbol — an open hand rather than a closed fist. Inside, the card read: "Return as yourself."\n\nIsolde sat on the edge of her bed, holding the card, aware that a line was being drawn and she was being asked to cross it. The first visit had been reconnaissance — forgivable, professional, contained. A second visit was a choice. The Société did not recruit; they invited. And invitations, once accepted, carried obligations she did not yet understand.\n\nShe dressed differently this time. No borrowed gown, no attempt at anonymity. She wore black — a simple dress that followed the line of her body without pretending to be anything other than what it was. At the door, she presented the card. The attendant studied her face with an expression that suggested recognition rather than scrutiny.\n\n"Welcome back, Ms. Maren," he said, and the sound of her own name in this place felt like the first crack in a wall she had spent years building.\n\nInside, Damien was waiting. Not at the periphery this time, but at the center of the room, as though the entire space had been arranged to lead to where he stood. He watched her cross the floor with an expression she could not read through his mask — though his mouth, that expressive, dangerous mouth, curved into something that was not quite a smile.\n\n"You came as yourself," he said.\n\n"Was there another option?"\n\n"There is always another option. That's what makes the choice interesting."`
-      },
-      {
-        id: 'ch5',
-        title: 'Beneath the Candlelight',
-        content: `The library was on the third floor, accessible by a narrow staircase that wound upward behind a door disguised as a bookcase. The irony was not lost on Isolde. Damien led her with the ease of someone navigating his own home, his hand not touching her back but hovering close enough that she could feel the heat of his palm through the fabric of her dress.\n\nThe room was smaller than she expected. Floor-to-ceiling shelves filled with leather-bound volumes, a fireplace that had been lit but left to burn low, and a pair of armchairs positioned at an angle that suggested conversation rather than confrontation. The air smelled of aged paper and wood smoke. It was, she realized, the most honest room in the building.\n\n"You want to know what we are," he said, pouring two glasses of something amber from a crystal decanter. Not a question.\n\n"I want to understand what you do."\n\n"A journalist's distinction." He handed her a glass. Their fingers touched, and neither of them pretended it was accidental. "What we do is simple. We create a space where the gap between who people are and who they pretend to be can be temporarily closed. No judgment. No permanence. No consequences beyond these walls."\n\n"That sounds like a philosophy of convenience."\n\n"All philosophies are convenient. The question is whether they are also true." He sat, and after a moment, she sat across from him. The fire crackled. Outside, the city continued its business of noise and light, unaware of this pocket of deliberate silence.\n\n"And what is true for you, Damien Ashford — if that is your name?"\n\nHis smile deepened. "It is tonight."`
-      }
-    ]
-  },
-
-  {
-    id: 'beneath-the-silk',
-    title: 'Beneath the Silk',
-    author: 'Sawp',
-    genre: ['Historical Romance', 'Intrigue', 'Erotica'],
-    cover: coverThemes.beneathSilk,
-    synopsis: 'The Imperial Court of Veranthos has always been a theater of power, where alliances are forged in bedchambers and reputations die over dinner. Lady Seraphine d\'Auvers, the newly appointed Keeper of the Imperial Wardrobe, holds a position that most consider decorative. They are wrong. The Keeper controls what the court wears, and in Veranthos, clothing is currency — every thread speaks of allegiance, every color signals intent. When Seraphine discovers that the silk shipments from the Eastern provinces carry more than fabric, she finds herself entangled with Lord Cassian Vael, the Emperor\'s shadowed advisor, whose own secrets are woven into the very trade routes she threatens to expose.',
-    chapters: [
-      {
-        id: 'ch1',
-        title: 'Thread and Thorn',
-        content: `The Imperial Wardrobe occupied an entire wing of the palace — seventeen rooms of silk and samite, velvet and voile, organized by season, occasion, and the intricate hierarchy of who was permitted to wear what. Most courtiers never saw beyond the first chamber, where finished garments hung on padded forms like a regiment of headless aristocrats. Seraphine lived in the rooms beyond, where fabric arrived in bolts and departed as influence.\n\nShe ran her fingers along the latest shipment from the Keshani weavers — silk so fine it felt like touching temperature rather than texture. The manifest listed forty bolts of cerulean, twenty of ivory, and ten of the forbidden black that only the Emperor's household could wear. The numbers matched. The weight did not.\n\n"Marisol," she called to her assistant without looking up. "Bring me the weighing scales. The accurate ones."\n\nThe discrepancy was subtle — perhaps a hundred grams per bolt, distributed across the entire shipment. Invisible to anyone who measured fabric by the eye rather than the gram. But Seraphine had learned long ago that power lived in the margins, in the spaces between what was declared and what was true. Someone was using the Imperial silk routes to transport something that wasn't silk. And they were doing it with extraordinary care.`
-      },
-      {
-        id: 'ch2',
-        title: 'The Shadow Advisor',
-        content: `Lord Cassian Vael attended court the way a physician attends a patient — with clinical attention and no visible emotion. He stood at the Emperor's left hand during morning audiences, a position that technically held no authority but practically commanded everything. Where the Emperor's right hand, the Grand Chancellor, issued decrees and settled disputes, the left hand whispered. And Cassian's whispers had shaped the fate of provinces.\n\nSeraphine had studied him from across the Great Hall, cataloguing details the way she catalogued thread counts. He dressed simply — always dark blue, always impeccably fitted, always without ornament. In a court where jewelry was a language, his bare throat and unadorned fingers spoke of either poverty or power so absolute that display was unnecessary. She knew which it was.\n\nShe requested an audience through the proper channels and was refused. She requested again and was ignored. On her third attempt, she simply appeared at his office door — a room in the east tower that most courtiers did not know existed.\n\n"Lady d'Auvers," he said, not looking up from his correspondence. "You are persistent."\n\n"You are evasive. One of us will have to yield, and I have the patience of a woman who matches embroidery patterns for a living."\n\nHe looked up then, and she was struck by the peculiar quality of his attention — not merely focused, but absorbing, as though he were reading her the way she read fabric, searching for the thread that would unravel everything.\n\n"Sit," he said. It was not an invitation. It was a concession.`
-      },
-      {
-        id: 'ch3',
-        title: 'Warp and Weft',
-        content: `The weights confirmed what Seraphine had suspected. Each bolt of silk from the Eastern provinces carried a thin layer of compressed powder between its innermost folds — almost imperceptible, distributed with the precision of someone who understood that discovery meant death. She isolated a sample under the lamplight of her private study and found herself staring at finely ground lapis lazuli.\n\nNot poison. Not drugs. Pigment. The most expensive pigment in the known world, worth more per gram than gold and controlled exclusively by the Imperial Pigment Office. Someone was smuggling the raw material for ultramarine blue — the color reserved for religious manuscripts and Imperial portraits — through the silk trade, presumably to sell on the black market where forgers and ambitious merchant-princes would pay fortunes for authentic material.\n\n"Clever," she murmured, resealing the bolt with hands that had begun to tremble. Not from fear — from the particular exhilaration of understanding a system that was designed to remain invisible.\n\nShe needed to tell Cassian. The thought arrived with a certainty that surprised her. Not the Emperor — the Emperor would respond with spectacle, public trials, and executions that would disrupt the trade routes for months. Cassian would respond with precision. Whatever his flaws — and she suspected they were numerous — the shadow advisor understood that sometimes the most powerful action was the one no one saw.\n\nShe sealed the sample in wax, pressed her signet ring into it, and wrote a single line on the accompanying card: "The silk is lying. So is someone at court. Dinner?"`
-      },
-      {
-        id: 'ch4',
-        title: 'The Color of Secrets',
-        content: `Cassian accepted her dinner invitation with a response that arrived by palace courier exactly eleven minutes after she sent it — a speed that suggested either remarkable efficiency or the possibility that he had been waiting.\n\nThey met in the Amber Salon, a small dining room on the second floor that was technically assigned to visiting dignitaries but had been empty since the Keshani ambassador's departure two months ago. Seraphine had arranged the table herself — two settings, facing each other, lit by beeswax candles that cast the room in the warm, honey-colored light that gave the salon its name.\n\n"You could have simply brought me the sample," Cassian said, studying the wax-sealed package she had placed between them like a centerpiece. "This feels ceremonial."\n\n"Everything in this palace is ceremonial. I simply chose to be honest about it." She poured wine — a Veranthan red, complex and unsubtle, much like the conversation she intended to have. "Open it."\n\nHe broke the seal with his thumbnail and unfolded the cloth to reveal the blue powder. In the candlelight, it glowed with an almost supernatural intensity — the deep, impossible blue of religious icons and imperial insignia. His expression did not change, but his hand stilled over the sample in a way that told her everything.\n\n"You already knew," she said.\n\nHe looked at her with an expression she would later describe to herself as respect sharpened by something warmer. "I suspected. Suspicion and proof are different currencies, Lady d'Auvers. You have just made me considerably wealthier."\n\n"Then I expect a return on my investment." She raised her glass. After a moment, he raised his. The crystal sang as the rims touched — a single, clear note that hung in the amber air between them like a promise.`
-      }
-    ]
-  },
-
-  // ── Hofuku ────────────────────────────────────
-  {
-    id: 'obsidian-chains',
-    title: 'Obsidian Chains',
-    author: 'Hofuku',
-    genre: ['Psychological Thriller', 'Dark Romance', 'Suspense'],
-    cover: coverThemes.obsidianChains,
-    synopsis: 'Dr. Elara Voss is one of the country\'s foremost criminal psychologists, known for her ability to map the architecture of violent minds. When she is assigned to evaluate Kael Morrow — a man accused of a series of meticulously staged disappearances where the victims were returned unharmed but fundamentally changed — she expects a standard assessment. What she finds instead is a subject who refuses to be studied, who answers questions with questions, and whose understanding of her own psychology is more precise than her own. As the sessions progress, the line between doctor and subject dissolves, and Elara begins to suspect that Kael\'s true interest was never the victims. It was always her.',
-    chapters: [
-      {
-        id: 'ch1',
-        title: 'Patient Zero',
-        content: `The interview room at Thornfield Psychiatric Facility was designed to be featureless — white walls, recessed lighting, a table bolted to the floor. The intention was neutrality, a blank canvas onto which the subject could project without environmental contamination. Dr. Elara Voss had conducted two hundred and seventeen evaluations in rooms exactly like this one. She had never once felt that the room was watching her back.\n\nKael Morrow sat with his hands resting on the table, fingers loosely interlaced. He did not look like a man accused of abducting six people. He looked like a man waiting for a dinner reservation — patient, faintly amused, dressed in the facility's standard grey with the ease of someone for whom clothing was incidental. His face was unremarkable in the way that only carefully curated faces could be. Symmetrical, composed, offering nothing.\n\n"Dr. Voss." He spoke her name as though tasting it. "I've read your publications. The Morrison case study was particularly insightful, though I think you underestimated the role of spatial memory in the subject's dissociative episodes."\n\nShe set her recorder on the table and sat down. "We're not here to discuss my work, Mr. Morrow."\n\n"Of course not. We're here to discuss mine." His smile was small, precise, and entirely devoid of warmth. "Where would you like me to begin?"`
-      },
-      {
-        id: 'ch2',
-        title: 'The Architecture of Absence',
-        content: `The case files were immaculate, which itself was a red flag. Criminals made mistakes — it was the foundational assumption of forensic psychology. They left traces, patterns, the psychological equivalent of fingerprints. Kael Morrow's file read like a textbook written by someone who had studied every textbook ever published and decided to write the one that would make them all obsolete.\n\nSix victims. Six disappearances over fourteen months. Each taken cleanly, held for exactly seventy-two hours, and returned to the precise location from which they had been taken. No physical harm. No ransom demands. No sexual contact. The victims described the experience with an eeriness that Elara found more disturbing than any account of violence: they spoke of conversations. Long, probing, intimate conversations conducted in darkness, during which Morrow had systematically dismantled their understanding of themselves and rebuilt it along different lines.\n\n"They came back different," Detective Ortiz had told her during the briefing. "Not traumatized. Different. One woman left her husband. Another quit a twenty-year career. The third man started painting — never touched a brush in his life, now he can't stop. It's like he rewired them."\n\nElara spread the files across her desk and studied them until the coffee in her cup went cold and the light through the window shifted from white to amber. The pattern was there — she could feel it the way she could feel a word on the tip of her tongue. Six people, all outwardly successful, all privately miserable, all living lives built on foundations they had never chosen to examine.\n\nKael Morrow wasn't a kidnapper. He was a locksmith, picking the tumblers of identity with a precision that bordered on artistry. The question was not how he did it, but why. And beneath that question, another one she was not yet ready to ask: why had the facility specifically requested her for the evaluation?`
-      },
-      {
-        id: 'ch3',
-        title: 'The Mirror Session',
-        content: `Session three. The recorder light blinked red in the silence between them. Elara had learned by now that silence was one of Morrow's instruments — he deployed it the way a musician deployed rests, creating shape and emphasis through the absence of sound.\n\n"Tell me about the first one," she said. "Victoria Ashland."\n\n"Victoria." He said the name carefully, as though handling something fragile. "Victoria was living inside a photograph of someone else's life. Her house, her career, her marriage — all constructed to match an image she'd absorbed from her mother at the age of seven. She had never once asked herself what she wanted. In forty-three years, the question had literally never occurred to her."\n\n"And you decided it was your responsibility to ask it for her?"\n\n"I decided it was a crime that no one else had." He leaned forward slightly. "You understand this, Dr. Voss. Better than you're allowing yourself to show. You've spent your career studying people who break the rules, and you've never once published a paper asking whether the rules themselves might be broken."\n\nThe observation landed with surgical precision. She kept her face neutral — a skill she had perfected over years of sitting across from people who studied faces for vulnerability. But something shifted in the air between them, a recalibration of forces, and she understood for the first time that she was not conducting an evaluation. She was participating in one.\n\n"This session is about you, Mr. Morrow. Not me."\n\n"Is it?" His eyes held hers with an intensity that felt almost physical. "Then why did you accept this assignment when three other psychologists were available? Why did you request additional sessions beyond the standard protocol? And why, Dr. Voss, have you stopped wearing your wedding ring since our first meeting?"\n\nShe looked down at her left hand. The pale band of skin where the ring had been seemed to glow under the fluorescent light like an accusation. She had removed it two days ago. She had told herself it was because the metal irritated her skin. She had known, even then, that this was not true.`
-      },
-      {
-        id: 'ch4',
-        title: 'The Seventy-Two Hour Rule',
-        content: `That night, Elara sat in her car in the facility parking lot for forty-seven minutes before starting the engine. The dashboard clock ticked forward with mechanical indifference while she replayed the session, searching for the moment she had lost control. She could not find it, which meant either it hadn't happened or it had happened so gradually that the boundary between professional distance and personal involvement had dissolved without a visible line being crossed.\n\nHer phone contained three unread messages from her husband, each progressively shorter. The first asked about dinner. The second asked if she was working late. The third was a single period — a punctuation mark that somehow contained more accusation than any sentence could.\n\nShe drove home through streets made unfamiliar by rain, thinking about Victoria Ashland. She had re-interviewed the woman yesterday, expecting the fragile, disoriented affect described in the original police reports. Instead, she found a woman of remarkable clarity — composed, articulate, sitting in an apartment she had chosen herself, doing work she had chosen herself, wearing an expression that could only be described as awake.\n\n"He didn't do anything to me," Victoria had said. "He undid something. Seventy-two hours of someone asking the questions you've spent your whole life avoiding. It sounds like torture. It was the opposite. It was the first time anyone had ever been genuinely interested in who I actually was rather than who I was supposed to be."\n\nElara had written this down in her clinical notes. She had not written down the part where her hand trembled as she did so, or the part where she recognized, with the cold precision of professional diagnosis, that she was developing a counter-transference response to a subject who had anticipated it from the beginning.`
-      },
-      {
-        id: 'ch5',
-        title: 'The Question Beneath',
-        content: `Session seven. She had requested twelve sessions total, four more than protocol allowed. The review board had approved it with the caveat that a supervising psychiatrist would review her notes after each meeting. She had agreed. She had also begun keeping a second set of notes — personal, unstructured, written in the margins of a leather notebook she kept locked in her desk drawer at home.\n\n"You've changed your posture," Kael observed. They were twenty minutes into the session, and she had not yet asked a clinical question. "In our first meeting, you sat with your shoulders back, your notepad as a barrier between us. Now you lean forward. The notepad is closed. You've crossed a line you don't have a name for yet."\n\n"Or I've adapted my approach based on clinical observation."\n\n"Both can be true." He paused. "You want to ask me something that isn't in your protocol. I can see it — it's the thing that changes shape every time you almost say it. Ask."\n\nThe fluorescent light hummed. The recorder blinked. Somewhere in the facility, a door closed with the heavy finality of institutional architecture.\n\n"Why me?" she said. "You could have requested any psychologist. Your legal team could have arranged a favorable evaluation with someone less thorough. Instead, you specifically asked for the one person most likely to see through you. Why?"\n\nKael was quiet for a long time. When he finally spoke, his voice had shed its careful composure, revealing something beneath that was not vulnerability, exactly, but its close and more dangerous cousin — honesty.\n\n"Because you are the only person I have ever encountered who is as precisely, exquisitely trapped as I was. And because I wanted — perhaps selfishly, perhaps not — to have one conversation in my life where neither person was pretending."`
-      }
-    ]
-  },
-
-  {
-    id: 'the-hollow-garden',
-    title: 'The Hollow Garden',
-    author: 'Hofuku',
-    genre: ['Gothic Horror', 'Romance', 'Mystery'],
-    cover: coverThemes.hollowGarden,
-    synopsis: 'When botanical illustrator Iris Blackwell inherits Ashenmere House — a decaying Georgian estate she has never heard of, from a grandmother she was told had died before she was born — she arrives to find a house that remembers her. The gardens, once legendary for their impossible varieties of night-blooming flowers, have grown wild and strange, producing species that exist in no botanical record. At the center of it all is the groundskeeper, Rowan Thorne, a man who speaks to the earth the way other people speak to lovers, and who warns Iris that some inheritances are not given but demanded. As the house reveals its secrets and the garden begins to bloom in patterns that mirror her dreams, Iris discovers that the women of her bloodline have always been tied to this soil — and the price of that bond is one she may have already begun to pay.',
-    chapters: [
-      {
-        id: 'ch1',
-        title: 'The Inheritance',
-        content: `The solicitor's letter arrived on a Thursday — the kind of thin, grey Thursday that existed solely to separate Wednesday from Friday. Iris was elbow-deep in watercolor, painting the dissected anatomy of a Selenicereus grandiflorus, when the postman rang. The letter was printed on cream paper heavy enough to suggest either wealth or its careful imitation, and it informed her, in the measured prose of the legal profession, that she had inherited an estate.\n\nAshenmere House. East Sussex. Fourteen acres of grounds including formal gardens, woodland, and a private lake. The property had been held in trust since the death of its last occupant — one Constance Blackwell, described as Iris's maternal grandmother, who had died not, as Iris had been told her entire life, in 1989, but three months ago, at the age of ninety-seven.\n\nIris read the letter twice, then set it down on her painting table where a drop of viridian green bled into the cream paper like a small act of vandalism. Her mother had been categorical: both grandparents had died before Iris was born. There were no photographs, no letters, no stories told over Sunday dinners. The past had been sealed with the particular thoroughness that suggested not forgetfulness but intention.\n\nShe called her mother. The phone rang seven times before going to voicemail. She called again. Voicemail. A third time. On the fourth ring, her mother answered with a single word: "Don't."\n\nThe line went dead. Iris booked a train ticket for the following morning.`
-      },
-      {
-        id: 'ch2',
-        title: 'The Groundskeeper',
-        content: `Ashenmere House sat at the end of a half-mile drive lined with yew trees so old they had begun to lean toward each other, forming a natural cathedral of dark, aromatic green. The house itself was Georgian in bones — symmetrical, rational, built by someone who believed in the perfectibility of spaces. But time and neglect had softened its certainties. Ivy had claimed the east wing entirely, and the front steps were furred with moss that made them treacherous in the afternoon rain.\n\nIris stood at the gate, her suitcase growing heavy in her hand, and felt the strangest sensation — not déjà vu exactly, but something adjacent to it. A physical recognition, as though her body remembered this place even if her mind did not. The air smelled of wet earth, jasmine, and something older, sweeter, that she could not name.\n\n"You'll be the granddaughter."\n\nThe voice came from the garden wall, where a man was kneeling among a bed of plants she didn't recognize. He stood slowly, brushing soil from his hands with the unhurried precision of someone who considered dirt a natural extension of his skin. Tall, lean, weathered by outdoor work into a kind of durable handsomeness. Dark hair, dark eyes, an expression that combined wariness with something she would later understand as relief.\n\n"Rowan Thorne," he said, offering a hand that was calloused and warm and slightly damp with earth. "I've been keeping things alive while the lawyers sorted you out."\n\n"You knew I was coming?"\n\n"The garden knew." He said this without irony, the way another person might note the weather. "It started blooming again three days ago. First time in months." He studied her face with an attention that felt botanical — as though he were identifying species, checking for the telltale markers of genus and heritage. "You look like her. Constance. More than your mother ever did."\n\n"You knew my mother?"\n\n"I knew she left. The house has been waiting for someone to come back." He picked up a pair of shears from the wall and nodded toward the front door. "Come in. I'll put the kettle on. And watch the third step — it remembers rain."`
-      },
-      {
-        id: 'ch3',
-        title: 'Night-Blooming',
-        content: `The first night, Iris dreamed of flowers she had never seen — enormous, luminous blooms that opened in darkness and exhaled a perfume so vivid it had texture. She woke at three in the morning with the scent still in her nostrils and found, with a lurch of disorientation, that it was not a remnant of the dream. The smell was real, drifting through the open window of the bedroom she had chosen on the second floor.\n\nShe went downstairs in bare feet, pulling a cardigan around her shoulders, and stepped into the garden. What she saw stopped her at the threshold of the back door.\n\nThe garden was glowing. Not metaphorically, not the gentle luminescence of moonlight on pale petals, but actually, biologically glowing — a soft, blue-white light that pulsed from deep within the flower beds like a living constellation. Dozens of blooms she had not noticed during daylight had opened in the darkness, their petals radiating bioluminescence with the slow, steady rhythm of breathing.\n\nShe was a trained botanist. She had illustrated three hundred species for the Royal Society's archives. She had never seen anything like this.\n\nIris knelt beside the nearest plant and examined it with trembling hands. The flower was structurally similar to a moonflower — Ipomoea alba — but the similarities ended at shape. The petals were thicker, almost fleshy, and warm to the touch. The glow came from within the cellular structure itself, not from any surface coating or reflection. At the flower's center, a complex arrangement of stamens produced a pollen that shimmered like crushed opals.\n\n"They only bloom for the women of this house."\n\nRowan's voice came from the darkness beyond the garden wall. He was standing among the yew trees, hands in his pockets, watching her with an expression she could not read in the luminous half-light.\n\n"That's not possible," she said, though even as the words left her mouth, she understood that they were inadequate.\n\n"Possible is a smaller word than most people think." He stepped into the garden, and the flowers nearest to him dimmed slightly, as though acknowledging his presence but not performing for it. "Your grandmother spent sixty years trying to understand them. She filled seventeen journals with observations, cross-references, hypotheses. In the end, she concluded that the garden was not a collection of plants. It was a relationship."\n\n"A relationship with what?"\n\n"With you. With your bloodline. With whatever is in your soil." He knelt beside her, close enough that she could feel the warmth of his arm against hers. "Welcome home, Iris Blackwell."`
-      }
-    ]
-  },
-
-  // ── Kuuhaku ───────────────────────────────────
-  {
-    id: 'void-between-us',
-    title: 'Void Between Us',
-    author: 'Kuuhaku',
-    genre: ['Literary Fiction', 'Romance', 'Melancholy'],
-    cover: coverThemes.voidBetween,
-    synopsis: 'After the death of his twin brother Soren, composer Aiden Lys stops hearing music. Not deafness — the clinical tests confirm his hearing is perfect. But the part of his mind that transforms sound into melody, that hears the architecture within noise, has gone silent. His therapist suggests a residency at the Valtheim Institute, a remote retreat on the Norwegian coast where artists go to recover what they have lost. There, he meets Maren Solvik, a sculptor who works exclusively in ice — creating figures that exist for hours before melting into nothing. Maren understands impermanence in ways that terrify and fascinate Aiden, and as the arctic winter closes around them, their shared grief becomes a language more precise than any they have known.',
-    chapters: [
-      {
-        id: 'ch1',
-        title: 'The Silent Octave',
-        content: `The piano stood in the corner of Aiden's apartment like a reproach. A Bösendorfer Imperial Grand — ninety-seven keys instead of the standard eighty-eight, those extra nine bass notes descending into frequencies that lived more in the body than the ear. Soren had found it at an estate sale in Vienna, had arranged its transport across two borders and up four flights of stairs with the logistical determination of a man who believed that the right instrument could change the shape of a life.\n\nAiden had not touched it in five months. He had not touched any instrument. He had not hummed, whistled, tapped a rhythm on a tabletop, or turned on the radio. The world continued to produce sound — traffic, conversation, the mechanical breathing of the city — but it arrived in his consciousness stripped of pattern, reduced to noise. It was as though his brother's death had removed the translator that lived between his ears and his understanding.\n\nHis therapist called it psychogenic amusia. "The hardware is intact," Dr. Lindqvist had explained, gesturing at the audiogram results. "Your auditory processing is normal. This is psychological — your brain has shut down its musical processing as a grief response. Think of it as an emotional circuit breaker."\n\n"When does it reset?"\n\nDr. Lindqvist had paused in the way that therapists pause when the honest answer is one they are trained not to give. "That depends on what you're willing to feel."\n\nAiden had left the appointment and walked home through streets that sounded like static.`
-      },
-      {
-        id: 'ch2',
-        title: 'Valtheim',
-        content: `The Valtheim Institute occupied a former fishing station on the coast of Lofoten, where the Norwegian Sea met the sky in a seamless plane of grey that made it impossible to tell where water ended and weather began. The buildings were wooden, painted the traditional red that Norwegian fishermen had used for centuries, now faded by salt wind into a color that suggested warmth without quite achieving it.\n\nAiden arrived in December, when the sun barely cleared the horizon and the days were measured in variations of darkness. His room was simple — a bed, a desk, a window that looked out over the harbor where fishing boats rocked in their moorings like sleeping animals. On the desk, someone had placed a small vase of dried lavender and a handwritten note: "Make what you can. Leave the rest."\n\nThere were seven other residents, each carrying their own particular silence. A painter who had lost her color vision. A novelist who could no longer read. A dancer whose body had healed from injury but whose muscles had forgotten their vocabulary. They ate together in a communal dining room and spoke little, bound by the shared understanding that their wounds were not the kind that responded to conversation.\n\nHe noticed the sculptor on his third day — or rather, he noticed her absence. She was not at meals, not in the common rooms, not walking the paths that connected the institute's buildings. When he asked the director about her, the woman smiled with the particular gentleness of someone who understood curiosity as the first sign of returning life.\n\n"Maren works at night," she said. "She works with ice. You'll understand when you see it."`
-      },
-      {
-        id: 'ch3',
-        title: 'Ice and Impermanence',
-        content: `He found her at two in the morning, standing on the frozen beach in the impossible blue light of the arctic winter. The temperature was minus fifteen, and his breath crystallized in front of him like a series of small, dissolving ghosts. Maren stood at the center of what he could only describe as a gallery — six figures carved from blocks of sea ice, each roughly human in scale, each captured in a posture of reaching. Reaching toward each other, toward the sky, toward something beyond the frame of visibility.\n\nShe worked with tools he didn't recognize — not chisels but instruments that looked medical, precise, designed for work measured in millimeters. Her hands were bare despite the cold, and they moved over the ice with an intimacy that made him feel he was witnessing something private.\n\n"They'll be gone by noon," she said without turning. Her voice was low, accented, carrying the particular calm of someone who had made peace with a fact that would destroy most people. "The temperature is rising. By morning, they'll start to lose definition. By midday, they'll be shapes. By evening, water."\n\n"Then why make them?"\n\nShe turned to look at him. Her face was extraordinary in the blue light — high cheekbones, pale eyes, an expression that combined precision with a sorrow so thoroughly integrated it had become structural. She was not beautiful despite her sadness. She was beautiful in a way that included it.\n\n"Because they exist now," she said. "And now is the only time anything has ever existed." She returned to her work, her bare hands shaping a figure's outstretched fingers with a tenderness that made his chest ache with something he had not felt in months — not grief, not its absence, but the space between them where music used to live.\n\nHe sat on a rock and watched her work until the sky began to lighten. Neither of them spoke again. In the morning, the figures were already beginning to soften, their reaching arms losing their definition, their faces becoming suggestions rather than statements. By the time the thin winter sun reached its highest point — barely above the horizon, casting long, amber shadows across the snow — they were gone.`
-      },
-      {
-        id: 'ch4',
-        title: 'The Language of Absence',
-        content: `They fell into a pattern that was not quite friendship and not quite something else — a third category for which neither of them had a word. She worked at night; he could not sleep. They met in the blue hours between midnight and dawn, occupying the same space with the careful choreography of two people who understood that proximity was not the same as intrusion.\n\nMaren told him about her brother on the seventh night. Not the facts — he already knew those from the institute director's careful, clinical summary: twin brother, drowning accident, eighteen months ago — but the texture of the loss. She spoke about it the way she carved ice, with precise, deliberate strokes that revealed shape through removal.\n\n"People say grief gets smaller," she said, her breath visible in the frozen air. "It doesn't. You get larger. You grow around it, the way a tree grows around a wire fence. The wire is still there. It's just inside you now, part of your structure. If you tried to remove it, you'd collapse."\n\nAiden said nothing. He had heard dozens of metaphors for grief — stages, waves, tunnels with light at the end. None of them had felt accurate. This one did. He felt the wire inside himself, threaded through his ribs, wound around the place where music used to generate spontaneously from the raw material of being alive.\n\n"You lost a twin too," she said. Not a question.\n\n"How did you know?"\n\n"Because you watch my sculptures the way I watch the tide. Like you're studying the mechanics of disappearance." She set down her tools and sat beside him on the frozen rock. The space between their shoulders was perhaps three inches — close enough to feel warmth, far enough to maintain the careful architecture of their not-quite-friendship. "What did he take with him? When he left?"\n\n"The music," Aiden said. It was the first time he had said it aloud. The words hung in the arctic air like one of Maren's ice sculptures — precise, temporary, true.\n\n"Then we'll have to find a new way to hear," she said, and her hand found his in the darkness.`
-      }
-    ]
-  },
-
-  {
-    id: 'white-noise',
-    title: 'White Noise',
-    author: 'Kuuhaku',
-    genre: ['Surreal Fiction', 'Psychological', 'Literary'],
-    cover: coverThemes.whiteNoise,
-    synopsis: 'Every morning, Juniper Hale wakes up and writes her name on the bathroom mirror. Not from compulsion — from necessity. Diagnosed with a rare form of dissociative identity disorder in which her sense of self dissolves during sleep and must be consciously reconstructed each morning, Juniper has developed a meticulous system of notes, recordings, and rituals to rebuild herself before the day begins. Her psychiatrist calls it maladaptive. Juniper calls it architecture. When a new neighbor moves into the apartment across the hall — a man named Eliot who seems to recognize her with an intimacy that suggests shared history she cannot remember — Juniper begins to suspect that the identity she reconstructs each morning may not be the only one she contains.',
-    chapters: [
-      {
-        id: 'ch1',
-        title: 'Reconstruction Protocol',
-        content: `Step one: open your eyes. This is harder than it sounds. There is a moment, every morning, between the dissolution of sleep and the assembly of wakefulness, when Juniper exists as pure sensation — a body without a biography, a nervous system without a narrative. It is the most honest she will be all day, and it terrifies her.\n\nStep two: look at the ceiling. The ceiling is white, textured, marked by a water stain in the northeast corner that resembles, depending on the light, either a running horse or a collapsed umbrella. This ceiling belongs to an apartment on the fourth floor of a building at 1847 Meridian Street. This apartment belongs to you. You are Juniper Hale.\n\nStep three: sit up. Reach for the notebook on the bedside table. It is red, spiral-bound, and contains everything you need to know. Page one: your name, your age, your address, your occupation (freelance translator, specializing in Japanese to English). Page two: your medical history. Page three: a photograph of your face, taken last week, annotated with the word "current." Pages four through eleven: the people in your life, their names, their relationships to you, what they know about your condition and what they do not.\n\nStep four: go to the bathroom. Write your name on the mirror with a dry-erase marker. Watch the letters form under your hand. The J, the U, the N — each letter a small act of authorship, a declaration that the person standing in this bathroom has a name and that name is a choice rather than a given.\n\nJuniper completed the protocol in fourteen minutes. A good day. Some mornings it took forty-five.`
-      },
-      {
-        id: 'ch2',
-        title: 'The Man Across the Hall',
-        content: `The moving truck arrived on a Tuesday, which Juniper noted in her evening journal with the detached precision she applied to all external changes. New variables were dangerous — not because they were threatening, but because they were unscripted. Every person in her life had been carefully integrated into the system: their faces memorized, their behaviors catalogued, their probable reactions to her condition anticipated and planned for. A new neighbor was a disruption in the architecture.\n\nShe watched from her peephole as the movers carried boxes up the stairs. Standard furniture, standard boxes, the unremarkable logistics of a life being relocated. The man directing them was perhaps thirty-five, medium height, with the kind of face that existed comfortably in the middle distance between handsome and forgettable. He wore glasses with thin wire frames and moved with the quiet efficiency of someone accustomed to managing spaces.\n\nShe had planned to introduce herself the following day, after adding him to her notebook and rehearsing the appropriate social protocols. Instead, she opened her door to take out the recycling and found him standing in the hallway, a bottle of wine in one hand and an expression of recognition so specific, so intimate, that it bypassed every defensive system she had built.\n\n"Juniper," he said. Not a question. Not an introduction. A confirmation.\n\nHer hand tightened on the recycling bag. "I'm sorry — do we know each other?"\n\nThe pause that followed was precisely two seconds long. In those two seconds, she watched something move across his face — surprise, recalibration, a sadness so briefly visible it might have been imagined.\n\n"No," he said, and the word cost him something. "I must be thinking of someone else. I'm Eliot. I just moved in across the hall."\n\nHe offered the wine. She took it. Their fingers did not touch. That night, she wrote his name in her notebook and underlined it three times, a notation system she had never used before and could not explain.`
-      },
-      {
-        id: 'ch3',
-        title: 'The Gaps Between',
-        content: `The first anomaly appeared on a Wednesday morning. During step four of her reconstruction protocol, Juniper reached for the dry-erase marker and found that her name was already written on the mirror. Not in her handwriting — or rather, not in the handwriting she recognized as hers. The letters were looser, more fluid, written by a hand that formed characters with the confidence of someone who did not need to think about the shapes.\n\nBelow the name, in the same unfamiliar hand, a single sentence: "He remembers us."\n\nJuniper stood very still. The bathroom was cold — she always left the window cracked at night, a habit she attributed to a preference for fresh air but which her psychiatrist had suggested was actually a subconscious desire to maintain sensory anchoring during sleep. The cold air moved across her skin like a question.\n\nShe opened her notebook and turned to the section marked "Anomalies" — a page she had created early in the system's development but had used only twice before. Both previous entries were minor: a coffee cup moved from its usual position, a book open to a page she didn't remember reading. This was different. This was communication.\n\nSomeone — some version of her that existed in the gap between sleep and waking — had written a message. And the message was about the man across the hall.\n\nJuniper photographed the mirror, logged the date and time, and cleaned the surface with careful, circular motions. She dressed, prepared her coffee, and sat at the kitchen table with her hands wrapped around the warm cup, staring at the wall that separated her apartment from Eliot's.\n\nHe had known her name. Not the polite, uncertain recognition of a half-remembered acquaintance. He had said it the way one says the name of someone who matters — with weight, with history, with the particular tenderness that only comes from repetition. He knew her. And some version of her, the version that wrote in confident, looping cursive while Juniper Hale was absent, knew him too.`
-      }
-    ]
-  },
-
-  {
-    id: 'silent-ember',
-    title: 'Silent Ember',
-    author: 'Kuuhaku',
-    genre: ['Slow Burn', 'Romance', 'Contemporary'],
-    cover: coverThemes.silentEmber,
-    synopsis: 'Yuki Tanaka runs a small, perpetually struggling used bookshop in a neighborhood that is slowly being consumed by development. She is thirty-four, precise, solitary, and has not been in a relationship since a quiet devastation three years ago that she refers to only as "the winter." When the building next door is purchased and converted into an artisan coffee roastery by Leon Castellano — a man whose warmth and openness are the exact inverse of everything Yuki has built her life around — she prepares for conflict. What she gets instead is patience. Leon does not push, does not pry, does not perform the aggressive friendliness she has learned to recognize as its own form of demand. He simply exists next door, making excellent coffee, leaving the connecting door between their shops propped open, and waiting with the steady, undemanding certainty of someone who understands that some fires take time to catch.',
-    chapters: [
-      {
-        id: 'ch1',
-        title: 'Paper Walls',
-        content: `The bookshop had no name, which was itself a kind of name. The locals called it "Yuki's place" or simply "the bookshop," and the hand-painted sign above the door said only BOOKS in a font that Yuki had chosen specifically for its refusal to charm. She did not want to charm. She wanted to sell books to people who wanted to buy them, and then she wanted to be left alone.\n\nThe shop occupied the ground floor of a narrow brick building on Clement Street, sandwiched between a laundromat that had been closed for renovation for two years and, until recently, an empty storefront whose windows had been papered over so long the paper had yellowed into a color that suggested nicotine or nostalgia. It was this storefront that had been purchased. It was this storefront that was currently producing sounds of construction — sawing, hammering, the occasional burst of Italian that carried through the shared wall with the emotional clarity of opera.\n\nYuki reshelved a collection of Murakami novels and listened to the noise with the resignation of someone who had learned that the world did not arrange itself around her preferences. The construction had been going on for three weeks. She had not introduced herself to the new owner, and she had no plans to. Experience had taught her that neighbors, like houseplants, required maintenance she was not prepared to provide.\n\nAt four in the afternoon, the noise stopped. At four-fifteen, there was a knock on the connecting door — a door she had assumed was sealed, decorative, a vestige of the building's original architecture when both spaces had been one. She opened it and found a man holding two cups of coffee and wearing an expression of such uncomplicated friendliness that she distrusted it immediately.\n\n"I'm Leon," he said. "I've been making a terrible amount of noise, and I thought the least I could do was bring caffeine." He extended one of the cups. "Ethiopian Yirgacheffe, medium roast, no sugar. The other one has oat milk, in case you prefer it."\n\nShe took the black coffee. It was, she would admit only to herself and much later, the best cup of coffee she had ever tasted.`
-      },
-      {
-        id: 'ch2',
-        title: 'The Open Door',
-        content: `Leon opened his roastery on a Saturday in early November, and the neighborhood, which had been dying by degrees for the better part of a decade, seemed to inhale. The space was beautiful in a way that made Yuki uncomfortable — exposed brick, warm wood, pendant lights that cast amber pools of illumination over a long communal table. A roasting machine occupied the back corner like a copper cathedral, and the smell — that deep, complex, transformative smell of coffee being made rather than merely brewed — drifted through the connecting door and into the bookshop like an uninvited guest who happened to be excellent company.\n\nThe connecting door was the problem. Leon had asked, with characteristic directness, if he could leave it open. "It's good for both of us," he'd explained. "People buy coffee, they see books. People buy books, they smell coffee. Symbiosis. Like clownfish and anemones."\n\n"Clownfish and anemones have a mutually beneficial biological relationship developed over millions of years of evolution," Yuki had replied. "We've known each other for six days."\n\n"Then we have millions of years of potential ahead of us." He'd said this without flirtation, without agenda, with the simple conviction of a man who believed that openness was a structural principle rather than a personality trait.\n\nShe had agreed to leave the door open during business hours. She told herself it was because of the foot traffic — her sales had increased by forty percent in the first week, an improvement she could not ethically ignore. She did not tell herself about the other reason: that the sound of Leon moving through his space — grinding beans, steaming milk, humming fragments of songs she almost recognized — had become a kind of ambient music that made the silence of her bookshop feel less like solitude and more like peace.\n\nShe did not tell herself this because naming it would make it real, and she had spent three years building a life in which real things were kept at a distance where they could not cause damage.`
-      },
-      {
-        id: 'ch3',
-        title: 'Slow Heat',
-        content: `The first gift appeared on a Tuesday. Not a gift, exactly — a recommendation. Leon had left a book on the counter beside the connecting door: a slim volume of Rilke's Letters to a Young Poet, dog-eared to a specific page. She found it when she opened the shop and stood in the doorway reading the marked passage.\n\n"Perhaps all the dragons in our lives are princesses who are only waiting to see us act, just once, with beauty and courage. Perhaps everything that frightens us is, in its deepest essence, something helpless that wants our love."\n\nShe did not mention it to him. She placed the book on the shelf behind the register, spine facing out, where she could see it from her reading chair. The following week, she left a book on his counter: Kōbō Abe's The Woman in the Dunes. She did not dog-ear a page. The entire novel was the message.\n\nThe book exchanges continued through November and into December, each selection a carefully calibrated communication. He left her Neruda; she left him Dazai. He left her a cookbook by Marcella Hazan with a recipe for simple tomato sauce; she left him Tanizaki's In Praise of Shadows. He left her a collection of love letters between artists; she left him a book of photographs of abandoned places.\n\nThey did not discuss the books. They discussed inventory, weather, neighborhood gossip, the structural integrity of the building's aging pipes. But beneath the surface conversation, another dialogue was taking place — slower, more careful, conducted in the language of other people's words because their own were not yet ready.\n\nOn the last day of December, Yuki arrived at the shop to find a cup of Ethiopian Yirgacheffe on her counter, still warm, with a small card that read: "Happy new year, Yuki. The door stays open." She held the cup in both hands and felt something shift — not dramatically, not with the seismic force she had learned to fear, but gently. Like an ember, covered in ash, discovering that it was still capable of warmth.`
-      }
-    ]
-  }
-];
-
-// ===== HELPER FUNCTIONS =====
-Yoru.getNovelById = function(id) {
-  return Yoru.novels.find(n => n.id === id) || null;
-};
-
-Yoru.getNovelsByAuthor = function(author) {
-  if (!author || author === 'All') return Yoru.novels;
-  return Yoru.novels.filter(n => n.author === author);
-};
-
-Yoru.getChapter = function(novelId, chapterId) {
-  const novel = Yoru.getNovelById(novelId);
-  if (!novel) return null;
-  return novel.chapters.find(c => c.id === chapterId) || null;
-};
-
-Yoru.getChapterIndex = function(novel, chapterId) {
-  return novel.chapters.findIndex(c => c.id === chapterId);
-};
-
-Yoru.authors = ['Sawp', 'Hofuku', 'Kuuhaku'];
+window.coverThemes = coverThemes;

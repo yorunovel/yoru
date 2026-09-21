@@ -15,7 +15,10 @@ Yoru.UI.icons = {
   play: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
   book: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
   shield: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
-  moon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>'
+  moon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>',
+  heart: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>',
+  heartFilled: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>',
+  user: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>'
 };
 
 // ===== NOVEL CARD =====
@@ -98,12 +101,19 @@ Yoru.UI.renderChapterItem = function(novelId, chapter, index) {
 // ===== APP HEADER =====
 Yoru.UI.renderHeader = function() {
   const user = Yoru.auth.getUser();
+  const isAdmin = user && user.role === 'admin';
+  const avatarUrl = user && user.avatar_url ? user.avatar_url : 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%231a1a1a" width="100" height="100"/><text y="50%" x="50%" fill="%23c9a84c" font-size="50" font-family="sans-serif" text-anchor="middle" dominant-baseline="central">Y</text></svg>';
+  
   return `
     <header class="app-header" id="app-header">
       <div class="header-brand" onclick="Yoru.router.navigate('/dashboard')">夜 Yoru</div>
+      
       <div class="header-actions">
-        <div class="header-user">
-          <span class="header-user-dot"></span>
+        <a class="header-link" onclick="Yoru.router.navigate('/contact')">Contact Us</a>
+        ${isAdmin ? `<a class="header-link" onclick="Yoru.router.navigate('/admin')">Admin</a>` : ''}
+        
+        <div class="header-user" onclick="Yoru.router.navigate('/profile')" style="cursor: pointer;">
+          <img src="${avatarUrl}" alt="Avatar" class="header-avatar" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1px solid var(--gold-dim); margin-right: 8px;">
           <span>${user ? user.username : 'Guest'}</span>
         </div>
         <button class="logout-btn" onclick="Yoru.auth.logout()" id="logout-btn">
@@ -112,6 +122,16 @@ Yoru.UI.renderHeader = function() {
         </button>
       </div>
     </header>
+  `;
+};
+
+// ===== LIKE BUTTON =====
+Yoru.UI.renderLikeButton = function(novelId, isLiked, count) {
+  return `
+    <button class="like-btn ${isLiked ? 'active' : ''}" onclick="Yoru.Pages.Novel.toggleLike('${novelId}')" id="like-btn-${novelId}">
+      ${isLiked ? Yoru.UI.icons.heartFilled : Yoru.UI.icons.heart}
+      <span class="like-count">${count || 0}</span>
+    </button>
   `;
 };
 
