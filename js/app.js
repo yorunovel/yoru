@@ -194,14 +194,22 @@ Yoru.router = {
     app.style.opacity = '0';
     app.style.transition = 'opacity 0.15s ease';
 
-    renderPromise.then(function(resolvedHtml) {
+    if (!renderPromise) {
+      renderPromise = Promise.resolve(Yoru.UI.renderEmptyState('Page module not found or failed to load.'));
+    }
+
+    Promise.resolve(renderPromise).then(function(resolvedHtml) {
       setTimeout(function() {
         app.innerHTML = resolvedHtml;
         app.style.opacity = '1';
 
         // Execute afterRender callback
         if (typeof afterRender === 'function') {
-          afterRender(params);
+          try {
+            afterRender(params);
+          } catch (e) {
+            console.error('afterRender error:', e);
+          }
         }
       }, 150);
     }).catch(function(error) {

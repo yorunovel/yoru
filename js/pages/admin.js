@@ -80,7 +80,7 @@ window.Yoru.Pages.Admin = {
                         </div>
                         <div class="form-group" style="margin-bottom: 1rem;">
                             <label for="chapter-content" style="display: block; margin-bottom: 0.5rem;">Content</label>
-                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">Tip: To insert an image, use markdown format on a new line: <code style="background: #333; padding: 2px 4px; border-radius: 4px;">![description](YOUR_IMAGE_URL)</code></p>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">Tip: You can paste a <strong>Google Docs link</strong> (e.g. <code>https://docs.google.com/document/d/...</code>) directly here, and it will be embedded automatically. Or write normal text and use <code>![alt](url)</code> for images.</p>
                             <textarea id="chapter-content" rows="10" required style="width: 100%; padding: 0.5rem; background: var(--bg-input, #2a2a2a); border: 1px solid var(--border-color, #333); color: white; border-radius: 4px;"></textarea>
                         </div>
                         <button type="submit" class="btn btn-primary" style="background: var(--accent-crimson, #dc143c); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 4px; cursor: pointer;">Add Chapter</button>

@@ -37,6 +37,11 @@ window.Yoru.Pages.Profile = {
           </div>
           
           <form id="profile-form" class="profile-form">
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">Membership Status</label>
+              <input type="text" class="form-input" value="Active Member (Since ${user.created_at ? new Date(user.created_at).toLocaleDateString() : 'Unknown'})" disabled style="background: rgba(0,0,0,0.2); color: var(--accent-gold);">
+            </div>
+            
             <div class="form-group">
               <label for="profile-username" class="form-label">Username</label>
               <input type="text" id="profile-username" class="form-input" value="${user.username || ''}" required minlength="3" maxlength="20">
