@@ -10,7 +10,8 @@ Yoru.auth = {
   // Login now uses Supabase Auth with email/password.
   // We simulate username login by appending @yoru.app to the username.
   login: async function(username, password) {
-    const email = username + '@yoru.app';
+    let cleanUsername = username.trim().toLowerCase();
+    const email = cleanUsername.includes('@') ? cleanUsername : cleanUsername + '@yoru.app';
     const { data, error } = await Yoru.supabase.auth.signInWithPassword({
       email: email,
       password: password
