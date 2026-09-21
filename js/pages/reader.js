@@ -38,16 +38,15 @@ Yoru.Pages.Reader = {
     var prevChapter = chapterIndex > 0 ? novel.chapters[chapterIndex - 1] : null;
     var nextChapter = chapterIndex < novel.chapters.length - 1 ? novel.chapters[chapterIndex + 1] : null;
 
-    // Convert content newlines to paragraphs
-    var paragraphs = chapter.content.split('\n').filter(p => p.trim() !== '').map(function(p) {
-      let text = p.trim();
-      let imgRegex = /^!\[(.*?)\]\((.*?)\)$/;
-      let match = text.match(imgRegex);
-      if (match) {
-        return `<img src="${match[2]}" alt="${match[1]}" class="reader-inline-image" style="max-width: 100%; border-radius: 8px; margin: 2rem auto; display: block;">`;
-      }
-      return '<p>' + text + '</p>';
-    }).join('');
+    // Convert Markdown to HTML using marked
+    var paragraphs = '';
+    if (window.marked) {
+        // Configure marked to break lines cleanly if needed, or just default
+        paragraphs = window.marked.parse(chapter.content);
+    } else {
+        // Fallback if marked fails to load
+        paragraphs = chapter.content.split('\n').filter(p => p.trim() !== '').map(p => '<p>' + p.trim() + '</p>').join('');
+    }
 
     return `
       <!-- Reading Progress Bar -->

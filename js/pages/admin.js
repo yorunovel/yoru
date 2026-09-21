@@ -79,13 +79,9 @@ window.Yoru.Pages.Admin = {
                             <input type="text" id="chapter-title" required style="width: 100%; padding: 0.5rem; background: var(--bg-input, #2a2a2a); border: 1px solid var(--border-color, #333); color: white; border-radius: 4px;">
                         </div>
                         <div class="form-group" style="margin-bottom: 1rem;">
-                            <label style="display: block; margin-bottom: 0.5rem;">Upload from EPUB (Optional)</label>
-                            <input type="file" id="chapter-epub-upload" accept=".epub" style="width: 100%; padding: 0.5rem; background: var(--bg-input, #2a2a2a); border: 1px solid var(--border-color, #333); color: white; border-radius: 4px;">
-                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Select an EPUB file to automatically extract its text into the content box below.</p>
-                        </div>
-                        <div class="form-group" style="margin-bottom: 1rem;">
-                            <label for="chapter-content" style="display: block; margin-bottom: 0.5rem;">Content</label>
-                            <textarea id="chapter-content" rows="10" required style="width: 100%; padding: 0.5rem; background: var(--bg-input, #2a2a2a); border: 1px solid var(--border-color, #333); color: white; border-radius: 4px;"></textarea>
+                            <label for="chapter-content" style="display: block; margin-bottom: 0.5rem;">Content (Markdown Support)</label>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">Tip: You can use Markdown formatting like <strong>**bold**</strong>, <em>*italic*</em>, and <code>![alt](url)</code> for images.</p>
+                            <textarea id="chapter-content" rows="10" required style="width: 100%; padding: 0.5rem; background: var(--bg-input, #2a2a2a); border: 1px solid var(--border-color, #333); color: white; border-radius: 4px; font-family: monospace;"></textarea>
                         </div>
                         <button type="submit" class="btn btn-primary" style="background: var(--accent-crimson, #dc143c); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 4px; cursor: pointer;">Add Chapter</button>
                     </form>
@@ -192,92 +188,7 @@ window.Yoru.Pages.Admin = {
             });
         }
 
-        const epubUpload = document.getElementById('chapter-epub-upload');
-        if (epubUpload) {
-            epubUpload.addEventListener('change', async function(e) {
-                const file = e.target.files[0];
-                if (!file) return;
-                
-                try {
-                    window.Yoru.UI.toast('Extracting EPUB...', 'info');
-                    const zip = await JSZip.loadAsync(file);
-                    
-                    let rootFile = '';
-                    // 1. Find OPF in container.xml
-                    const containerXml = await zip.file('META-INF/container.xml')?.async("string");
-                    if (containerXml) {
-                        const containerDoc = new DOMParser().parseFromString(containerXml, 'text/xml');
-                        const rootfileNode = containerDoc.querySelector('rootfile');
-                        if (rootfileNode) {
-                            rootFile = rootfileNode.getAttribute('full-path');
-                        }
-                    }
-                    
-                    let htmlFilesToRead = [];
-                    
-                    // 2. Parse OPF to get reading order
-                    if (rootFile && zip.file(rootFile)) {
-                        const rootPathPrefix = rootFile.includes('/') ? rootFile.substring(0, rootFile.lastIndexOf('/') + 1) : '';
-                        const opfXml = await zip.file(rootFile).async("string");
-                        const opfDoc = new DOMParser().parseFromString(opfXml, 'text/xml');
-                        
-                        // Map id -> href
-                        const manifest = {};
-                        opfDoc.querySelectorAll('manifest > item').forEach(item => {
-                            manifest[item.getAttribute('id')] = item.getAttribute('href');
-                        });
-                        
-                        // Follow spine
-                        opfDoc.querySelectorAll('spine > itemref').forEach(itemref => {
-                            const idref = itemref.getAttribute('idref');
-                            if (manifest[idref]) {
-                                let href = manifest[idref];
-                                // URL decode href in case it has %20
-                                href = decodeURIComponent(href);
-                                htmlFilesToRead.push(rootPathPrefix + href);
-                            }
-                        });
-                    }
-                    
-                    // Fallback to alphabetical if OPF failed
-                    if (htmlFilesToRead.length === 0) {
-                        htmlFilesToRead = Object.keys(zip.files).filter(name => name.endsWith('.html') || name.endsWith('.xhtml'));
-                        htmlFilesToRead.sort();
-                    }
-                    
-                    let textContent = '';
-                    
-                    for (const name of htmlFilesToRead) {
-                        if (!zip.file(name)) continue;
-                        
-                        const htmlString = await zip.file(name).async("string");
-                        const doc = new DOMParser().parseFromString(htmlString, 'text/html');
-                        
-                        // Remove scripts and styles
-                        doc.querySelectorAll('script, style').forEach(el => el.remove());
-                        
-                        // Flatten block elements to newlines
-                        doc.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li, br, hr').forEach(el => {
-                            el.insertAdjacentText('beforebegin', '\n\n');
-                            el.insertAdjacentText('afterend', '\n\n');
-                        });
-                        
-                        // Extract text content and normalize spaces
-                        let text = doc.body ? doc.body.textContent : doc.documentElement.textContent;
-                        text = text.replace(/^[ \t]+/gm, ''); // remove leading spaces on each line
-                        text = text.replace(/\n{3,}/g, '\n\n'); // replace 3+ newlines with 2 newlines
-                        
-                        textContent += text.trim() + '\n\n';
-                    }
-                    
-                    document.getElementById('chapter-content').value = textContent.trim();
-                    window.Yoru.UI.toast('EPUB text extracted successfully!', 'success');
-                } catch (error) {
-                    console.error('EPUB parsing error:', error);
-                    window.Yoru.UI.toast('Failed to parse EPUB file.', 'error');
-                }
-            });
-        }
+
 
         const addChapterForm = document.getElementById('add-chapter-form');
         if (addChapterForm) {
