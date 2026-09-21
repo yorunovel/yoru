@@ -32,8 +32,6 @@ Yoru.UI.renderNovelCard = function(novel, index) {
       <div class="novel-card-cover">
         <div class="novel-card-cover-art" style="${coverStyle}">
           <div class="cover-decoration"></div>
-          <span class="cover-title">${novel.title}</span>
-          <span class="cover-author">${novel.author}</span>
         </div>
       </div>
       <div class="novel-card-body">
@@ -57,8 +55,6 @@ Yoru.UI.renderCoverArt = function(novel, size) {
   return `
     <div class="${cls}" style="${coverStyle}">
       <div class="cover-decoration"></div>
-      <span class="cover-title">${novel.title}</span>
-      <span class="cover-author">${novel.author}</span>
     </div>
   `;
 };
@@ -102,7 +98,7 @@ Yoru.UI.renderChapterItem = function(novelId, chapter, index) {
 Yoru.UI.renderHeader = function() {
   const user = Yoru.auth.getUser();
   const isAdmin = user && user.role === 'admin';
-  const avatarUrl = user && user.avatar_url ? user.avatar_url : 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%231a1a1a" width="100" height="100"/><text y="50%" x="50%" fill="%23c9a84c" font-size="50" font-family="sans-serif" text-anchor="middle" dominant-baseline="central">Y</text></svg>';
+  const avatarUrl = user && user.avatar_url ? user.avatar_url : "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%231a1a1a' width='100' height='100'/><text y='50%' x='50%' fill='%23c9a84c' font-size='50' font-family='sans-serif' text-anchor='middle' dominant-baseline='central'>Y</text></svg>";
   
   return `
     <header class="app-header" id="app-header">
