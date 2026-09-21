@@ -101,6 +101,7 @@ Yoru.Pages.Login = {
         // Shake animation on the card
         var card = document.querySelector('.login-card');
         card.style.animation = 'none';
+        card.style.opacity = '1'; // Fix: prevent card from disappearing
         card.offsetHeight; // Force reflow
         card.style.animation = 'shake 0.4s ease';
       });
