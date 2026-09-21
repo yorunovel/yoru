@@ -14,8 +14,15 @@ window.Yoru.Pages.Admin = {
         }
 
         return `
-            <div class="admin-container" style="max-width: 800px; margin: 0 auto; padding: 2rem;">
-                <h1>Admin Panel</h1>
+            ${window.Yoru.UI.renderHeader()}
+            <div class="admin-page yoru-container" id="admin-page">
+                <div class="admin-content" style="max-width: 800px; margin: 0 auto; padding: 2rem;">
+                    <!-- Back Button -->
+                    <div onclick="Yoru.router.navigate('/dashboard')" style="cursor: pointer; margin-bottom: 2rem; display: inline-flex; align-items: center; gap: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">
+                        ${window.Yoru.UI.icons ? window.Yoru.UI.icons.back : '&larr;'} Back to Dashboard
+                    </div>
+                    
+                    <h1 class="page-title heading-serif" style="color: var(--accent-gold, #ffd700); margin-bottom: 2rem;">Admin Panel</h1>
                 
                 <section class="admin-section" style="margin-top: 2rem; background: var(--bg-surface, #1e1e1e); padding: 1.5rem; border-radius: 8px;">
                     <h2 style="color: var(--accent-gold, #ffd700); margin-bottom: 1rem;">Add New Novel</h2>

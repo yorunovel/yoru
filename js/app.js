@@ -228,12 +228,17 @@ Yoru.router = {
   // Listen for hash changes
   window.addEventListener('hashchange', Yoru.router.handleRoute);
 
-  // Initial route on page load
-  window.addEventListener('DOMContentLoaded', function() {
-    // Set initial hash if empty
+  function startApp() {
     if (!window.location.hash) {
       window.location.hash = '#/login';
     }
     Yoru.router.handleRoute();
-  });
+  }
+
+  // Initial route on page load
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', startApp);
+  } else {
+    startApp();
+  }
 })();

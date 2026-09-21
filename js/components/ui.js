@@ -114,7 +114,7 @@ Yoru.UI.renderHeader = function() {
         </div>
         <button class="logout-btn" onclick="Yoru.auth.logout()" id="logout-btn">
           ${Yoru.UI.icons.logout}
-          <span>Exit</span>
+          <span>Logout</span>
         </button>
       </div>
     </header>

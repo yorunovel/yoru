@@ -19,7 +19,12 @@ window.Yoru.Pages.Profile = {
     const avatarUrl = user.avatar_url || '/assets/default-avatar.png'; // Fallback if no avatar
 
     return `
+      ${window.Yoru.UI.renderHeader()}
       <div class="profile-page yoru-container">
+        <!-- Back Button -->
+        <div onclick="Yoru.router.navigate('/dashboard')" style="cursor: pointer; margin-bottom: 2rem; margin-top: 1rem; display: inline-flex; align-items: center; gap: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">
+          ${window.Yoru.UI.icons ? window.Yoru.UI.icons.back : '&larr;'} Back to Dashboard
+        </div>
         <h1 class="page-title">Your Profile</h1>
         
         <div class="profile-card dark-panel">
