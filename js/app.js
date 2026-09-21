@@ -20,6 +20,10 @@ Yoru.auth = {
       throw error;
     }
     
+    if (data.session && data.session.user) {
+      await Yoru.auth.loadUserProfile(data.session.user.id);
+    }
+    
     return data;
   },
 
