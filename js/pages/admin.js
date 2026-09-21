@@ -22,7 +22,11 @@ window.Yoru.Pages.Admin = {
                     <form id="add-novel-form" class="admin-form">
                         <div class="form-group" style="margin-bottom: 1rem;">
                             <label for="novel-id" style="display: block; margin-bottom: 0.5rem;">Novel ID (slug)</label>
-                            <input type="text" id="novel-id" required style="width: 100%; padding: 0.5rem; background: var(--bg-input, #2a2a2a); border: 1px solid var(--border-color, #333); color: white; border-radius: 4px;">
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="novel-id" required style="flex: 1; padding: 0.5rem; background: var(--bg-input, #2a2a2a); border: 1px solid var(--border-color, #333); color: white; border-radius: 4px;">
+                                <button type="button" id="load-novel-btn" style="background: #333; color: white; border: none; padding: 0 1rem; border-radius: 4px; cursor: pointer;">Load</button>
+                            </div>
+                            <small style="color: #888;">To edit an existing novel, enter its ID and click Load.</small>
                         </div>
                         <div class="form-group" style="margin-bottom: 1rem;">
                             <label for="novel-title" style="display: block; margin-bottom: 0.5rem;">Title</label>
@@ -57,7 +61,11 @@ window.Yoru.Pages.Admin = {
                         </div>
                         <div class="form-group" style="margin-bottom: 1rem;">
                             <label for="chapter-id" style="display: block; margin-bottom: 0.5rem;">Chapter ID (slug)</label>
-                            <input type="text" id="chapter-id" required style="width: 100%; padding: 0.5rem; background: var(--bg-input, #2a2a2a); border: 1px solid var(--border-color, #333); color: white; border-radius: 4px;">
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="chapter-id" required style="flex: 1; padding: 0.5rem; background: var(--bg-input, #2a2a2a); border: 1px solid var(--border-color, #333); color: white; border-radius: 4px;">
+                                <button type="button" id="load-chapter-btn" style="background: #333; color: white; border: none; padding: 0 1rem; border-radius: 4px; cursor: pointer;">Load</button>
+                            </div>
+                            <small style="color: #888;">To edit a chapter, enter Novel ID & Chapter ID, then click Load.</small>
                         </div>
                         <div class="form-group" style="margin-bottom: 1rem;">
                             <label for="chapter-title" style="display: block; margin-bottom: 0.5rem;">Chapter Title</label>
@@ -80,6 +88,36 @@ window.Yoru.Pages.Admin = {
         if (!user || user.role !== 'admin') {
             return;
         }
+        
+        function convertGoogleDriveLink(url) {
+            if (!url) return null;
+            const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+            if (match && match[1]) {
+                return `https://lh3.googleusercontent.com/d/${match[1]}`;
+            }
+            return url;
+        }
+
+        const loadNovelBtn = document.getElementById('load-novel-btn');
+        if (loadNovelBtn) {
+            loadNovelBtn.addEventListener('click', async function() {
+                const id = document.getElementById('novel-id').value.trim();
+                if (!id) return alert('Please enter a Novel ID first');
+                
+                const { data, error } = await window.Yoru.supabase.from('novels').select('*').eq('id', id).single();
+                if (error || !data) {
+                    return alert('Novel not found');
+                }
+                
+                document.getElementById('novel-title').value = data.title || '';
+                document.getElementById('novel-author').value = data.author || '';
+                document.getElementById('novel-genre').value = data.genre ? data.genre.join(', ') : '';
+                document.getElementById('novel-synopsis').value = data.synopsis || '';
+                document.getElementById('novel-cover').value = data.cover_image || '';
+                
+                window.Yoru.UI.toast('Novel data loaded', 'success');
+            });
+        }
 
         const addNovelForm = document.getElementById('add-novel-form');
         if (addNovelForm) {
@@ -91,8 +129,9 @@ window.Yoru.Pages.Admin = {
                 const author = document.getElementById('novel-author').value.trim();
                 const genreInput = document.getElementById('novel-genre').value;
                 const synopsis = document.getElementById('novel-synopsis').value.trim();
-                const coverImage = document.getElementById('novel-cover') ? document.getElementById('novel-cover').value.trim() : null;
+                const coverImageRaw = document.getElementById('novel-cover') ? document.getElementById('novel-cover').value.trim() : null;
                 
+                const coverImage = convertGoogleDriveLink(coverImageRaw);
                 const genre = genreInput.split(',').map(g => g.trim()).filter(g => g);
 
                 try {
@@ -101,24 +140,44 @@ window.Yoru.Pages.Admin = {
                     
                     const { data, error } = await window.Yoru.supabase
                         .from('novels')
-                        .insert([novelData]);
+                        .upsert([novelData]);
 
                     if (error) throw error;
                     
                     if (window.Yoru.UI && window.Yoru.UI.toast) {
-                        window.Yoru.UI.toast('Novel added successfully', 'success');
+                        window.Yoru.UI.toast('Novel saved successfully', 'success');
                     } else {
-                        alert('Novel added successfully');
+                        alert('Novel saved successfully');
                     }
                     addNovelForm.reset();
                 } catch (error) {
-                    console.error('Error adding novel:', error);
+                    console.error('Error saving novel:', error);
                     if (window.Yoru.UI && window.Yoru.UI.toast) {
-                        window.Yoru.UI.toast('Error adding novel: ' + error.message, 'error');
+                        window.Yoru.UI.toast('Error saving novel: ' + error.message, 'error');
                     } else {
-                        alert('Error adding novel: ' + error.message);
+                        alert('Error saving novel: ' + error.message);
                     }
                 }
+            });
+        }
+
+        const loadChapterBtn = document.getElementById('load-chapter-btn');
+        if (loadChapterBtn) {
+            loadChapterBtn.addEventListener('click', async function() {
+                const novelId = document.getElementById('chapter-novel-id').value.trim();
+                const id = document.getElementById('chapter-id').value.trim();
+                if (!novelId || !id) return alert('Please enter both Novel ID and Chapter ID first');
+                
+                const { data, error } = await window.Yoru.supabase.from('chapters')
+                    .select('*').eq('novel_id', novelId).eq('id', id).single();
+                if (error || !data) {
+                    return alert('Chapter not found');
+                }
+                
+                document.getElementById('chapter-title').value = data.title || '';
+                document.getElementById('chapter-content').value = data.content || '';
+                
+                window.Yoru.UI.toast('Chapter data loaded', 'success');
             });
         }
 
@@ -130,27 +189,35 @@ window.Yoru.Pages.Admin = {
                 const novel_id = document.getElementById('chapter-novel-id').value.trim();
                 const id = document.getElementById('chapter-id').value.trim();
                 const title = document.getElementById('chapter-title').value.trim();
-                const content = document.getElementById('chapter-content').value.trim();
+                let content = document.getElementById('chapter-content').value.trim();
+                
+                content = content.replace(/!\[(.*?)\]\((https:\/\/drive\.google\.com\/.*?)\)/g, function(match, alt, fullUrl) {
+                    const driveIdMatch = fullUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || fullUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                    if (driveIdMatch && driveIdMatch[1]) {
+                        return `![${alt}](https://lh3.googleusercontent.com/d/${driveIdMatch[1]})`;
+                    }
+                    return match;
+                });
 
                 try {
                     const { data, error } = await window.Yoru.supabase
                         .from('chapters')
-                        .insert([{ novel_id, id, title, content }]);
+                        .upsert([{ novel_id, id, title, content }]);
 
                     if (error) throw error;
                     
                     if (window.Yoru.UI && window.Yoru.UI.toast) {
-                        window.Yoru.UI.toast('Chapter added successfully', 'success');
+                        window.Yoru.UI.toast('Chapter saved successfully', 'success');
                     } else {
-                        alert('Chapter added successfully');
+                        alert('Chapter saved successfully');
                     }
                     addChapterForm.reset();
                 } catch (error) {
-                    console.error('Error adding chapter:', error);
+                    console.error('Error saving chapter:', error);
                     if (window.Yoru.UI && window.Yoru.UI.toast) {
-                        window.Yoru.UI.toast('Error adding chapter: ' + error.message, 'error');
+                        window.Yoru.UI.toast('Error saving chapter: ' + error.message, 'error');
                     } else {
-                        alert('Error adding chapter: ' + error.message);
+                        alert('Error saving chapter: ' + error.message);
                     }
                 }
             });
