@@ -22,7 +22,7 @@ Yoru.Pages.Login = {
 
           <!-- Login Card -->
           <div class="login-card">
-            <form class="login-form" id="login-form" onsubmit="Yoru.Pages.Login.handleSubmit(event)">
+            <form class="login-form" id="login-form">
               
               <div class="form-group">
                 <label class="form-label" for="login-username">Username</label>
@@ -107,6 +107,12 @@ Yoru.Pages.Login = {
   },
 
   afterRender: function() {
+    // Attach event listener properly
+    var form = document.getElementById('login-form');
+    if (form) {
+      form.addEventListener('submit', Yoru.Pages.Login.handleSubmit);
+    }
+    
     // Focus the username field after render
     setTimeout(function() {
       var usernameInput = document.getElementById('login-username');
