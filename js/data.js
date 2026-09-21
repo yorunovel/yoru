@@ -35,12 +35,25 @@ Yoru.getNovelById = async function(id) {
   return data;
 };
 
-Yoru.getNovelsByAuthor = async function(author) {
+Yoru.getAllNovels = async function() {
   let query = Yoru.supabase.from('novels').select('*, chapters(id)');
   
-  if (author && author !== 'All') {
-    query = query.eq('author', author);
-  }
+  const { data, error } = await query.order('created_at', { ascending: false });
+  if (error || !data) return [];
+  
+  return data.map(novel => {
+    if (!novel.cover) {
+      novel.cover = {
+        image: novel.cover_image,
+        gradient: novel.cover_gradient,
+        accent: novel.cover_accent
+      };
+    }
+    return novel;
+  });
+};
+
+Yoru.getNovelsByAuthor = async function(author) {
   
   const { data, error } = await query.order('order_index', { ascending: true });
   if (error || !data) return [];

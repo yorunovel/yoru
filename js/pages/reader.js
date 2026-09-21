@@ -39,8 +39,14 @@ Yoru.Pages.Reader = {
     var nextChapter = chapterIndex < novel.chapters.length - 1 ? novel.chapters[chapterIndex + 1] : null;
 
     // Convert content newlines to paragraphs
-    var paragraphs = chapter.content.split('\n\n').map(function(p) {
-      return '<p>' + p.trim() + '</p>';
+    var paragraphs = chapter.content.split('\n').filter(p => p.trim() !== '').map(function(p) {
+      let text = p.trim();
+      let imgRegex = /^!\[(.*?)\]\((.*?)\)$/;
+      let match = text.match(imgRegex);
+      if (match) {
+        return `<img src="${match[2]}" alt="${match[1]}" class="reader-inline-image" style="max-width: 100%; border-radius: 8px; margin: 2rem auto; display: block;">`;
+      }
+      return '<p>' + text + '</p>';
     }).join('');
 
     return `

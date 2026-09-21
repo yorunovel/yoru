@@ -40,6 +40,10 @@ window.Yoru.Pages.Admin = {
                             <label for="novel-synopsis" style="display: block; margin-bottom: 0.5rem;">Synopsis</label>
                             <textarea id="novel-synopsis" rows="4" required style="width: 100%; padding: 0.5rem; background: var(--bg-input, #2a2a2a); border: 1px solid var(--border-color, #333); color: white; border-radius: 4px;"></textarea>
                         </div>
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label for="novel-cover" style="display: block; margin-bottom: 0.5rem;">Cover Image URL (optional)</label>
+                            <input type="text" id="novel-cover" placeholder="e.g. https://drive.google.com/uc?id=YOUR_FILE_ID" style="width: 100%; padding: 0.5rem; background: var(--bg-input, #2a2a2a); border: 1px solid var(--border-color, #333); color: white; border-radius: 4px;">
+                        </div>
                         <button type="submit" class="btn btn-primary" style="background: var(--accent-crimson, #dc143c); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 4px; cursor: pointer;">Add Novel</button>
                     </form>
                 </section>
@@ -61,6 +65,7 @@ window.Yoru.Pages.Admin = {
                         </div>
                         <div class="form-group" style="margin-bottom: 1rem;">
                             <label for="chapter-content" style="display: block; margin-bottom: 0.5rem;">Content</label>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">Tip: To insert an image, use markdown format on a new line: <code style="background: #333; padding: 2px 4px; border-radius: 4px;">![description](YOUR_IMAGE_URL)</code></p>
                             <textarea id="chapter-content" rows="10" required style="width: 100%; padding: 0.5rem; background: var(--bg-input, #2a2a2a); border: 1px solid var(--border-color, #333); color: white; border-radius: 4px;"></textarea>
                         </div>
                         <button type="submit" class="btn btn-primary" style="background: var(--accent-crimson, #dc143c); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 4px; cursor: pointer;">Add Chapter</button>
@@ -86,13 +91,17 @@ window.Yoru.Pages.Admin = {
                 const author = document.getElementById('novel-author').value.trim();
                 const genreInput = document.getElementById('novel-genre').value;
                 const synopsis = document.getElementById('novel-synopsis').value.trim();
+                const coverImage = document.getElementById('novel-cover') ? document.getElementById('novel-cover').value.trim() : null;
                 
                 const genre = genreInput.split(',').map(g => g.trim()).filter(g => g);
 
                 try {
+                    const novelData = { id, title, author, genre, synopsis };
+                    if (coverImage) novelData.cover_image = coverImage;
+                    
                     const { data, error } = await window.Yoru.supabase
                         .from('novels')
-                        .insert([{ id, title, author, genre, synopsis }]);
+                        .insert([novelData]);
 
                     if (error) throw error;
                     
