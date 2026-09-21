@@ -88,6 +88,7 @@ Yoru.Pages.Login = {
     Yoru.auth.login(username, password)
       .then(function(data) {
         // Successful login
+        Yoru.UI.toast('Welcome back.', 'success');
         Yoru.router.navigate('/dashboard');
       })
       .catch(function(error) {
