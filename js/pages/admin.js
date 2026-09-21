@@ -79,8 +79,12 @@ window.Yoru.Pages.Admin = {
                             <input type="text" id="chapter-title" required style="width: 100%; padding: 0.5rem; background: var(--bg-input, #2a2a2a); border: 1px solid var(--border-color, #333); color: white; border-radius: 4px;">
                         </div>
                         <div class="form-group" style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem;">Upload from EPUB (Optional)</label>
+                            <input type="file" id="chapter-epub-upload" accept=".epub" style="width: 100%; padding: 0.5rem; background: var(--bg-input, #2a2a2a); border: 1px solid var(--border-color, #333); color: white; border-radius: 4px;">
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Select an EPUB file to automatically extract its text into the content box below.</p>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 1rem;">
                             <label for="chapter-content" style="display: block; margin-bottom: 0.5rem;">Content</label>
-                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">Tip: You can paste a <strong>Google Docs link</strong> (e.g. <code>https://docs.google.com/document/d/...</code>) directly here, and it will be embedded automatically. Or write normal text and use <code>![alt](url)</code> for images.</p>
                             <textarea id="chapter-content" rows="10" required style="width: 100%; padding: 0.5rem; background: var(--bg-input, #2a2a2a); border: 1px solid var(--border-color, #333); color: white; border-radius: 4px;"></textarea>
                         </div>
                         <button type="submit" class="btn btn-primary" style="background: var(--accent-crimson, #dc143c); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 4px; cursor: pointer;">Add Chapter</button>
@@ -188,6 +192,46 @@ window.Yoru.Pages.Admin = {
             });
         }
 
+        const epubUpload = document.getElementById('chapter-epub-upload');
+        if (epubUpload) {
+            epubUpload.addEventListener('change', async function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                try {
+                    window.Yoru.UI.toast('Extracting EPUB...', 'info');
+                    const zip = await JSZip.loadAsync(file);
+                    
+                    const htmlFiles = Object.keys(zip.files).filter(name => name.endsWith('.html') || name.endsWith('.xhtml'));
+                    htmlFiles.sort();
+                    
+                    let textContent = '';
+                    for (const name of htmlFiles) {
+                        const htmlString = await zip.file(name).async("string");
+                        const doc = new DOMParser().parseFromString(htmlString, 'text/html');
+                        
+                        // Extract text nicely, keeping paragraphs
+                        const paragraphs = Array.from(doc.body.querySelectorAll('p, div, h1, h2, h3, h4'))
+                            .map(el => el.textContent.trim())
+                            .filter(text => text.length > 0);
+                            
+                        if (paragraphs.length > 0) {
+                            textContent += paragraphs.join('\n\n') + '\n\n';
+                        } else {
+                            // Fallback if no specific tags
+                            textContent += doc.body.textContent.trim() + '\n\n';
+                        }
+                    }
+                    
+                    document.getElementById('chapter-content').value = textContent.trim();
+                    window.Yoru.UI.toast('EPUB text extracted successfully!', 'success');
+                } catch (error) {
+                    console.error('EPUB parsing error:', error);
+                    window.Yoru.UI.toast('Failed to parse EPUB file.', 'error');
+                }
+            });
+        }
+
         const addChapterForm = document.getElementById('add-chapter-form');
         if (addChapterForm) {
             addChapterForm.addEventListener('submit', async function(e) {
@@ -200,51 +244,6 @@ window.Yoru.Pages.Admin = {
                 const id = document.getElementById('chapter-id').value.trim();
                 const title = document.getElementById('chapter-title').value.trim();
                 let content = document.getElementById('chapter-content').value.trim();
-                
-                // If user pasted a raw Google Docs link as the entire content, try to extract the text
-                if (content.startsWith('https://docs.google.com/document/d/')) {
-                    const match = content.match(/\/document\/d\/([a-zA-Z0-9_-]+)/);
-                    if (match && match[1]) {
-                        submitBtn.innerText = 'Extracting from Google Docs...';
-                        submitBtn.disabled = true;
-                        
-                        const fileId = match[1];
-                        const exportUrl = `https://docs.google.com/document/export?format=txt&id=${fileId}`;
-                        
-                        const proxies = [
-                            `https://corsproxy.io/?${encodeURIComponent(exportUrl)}`,
-                            `https://api.allorigins.win/raw?url=${encodeURIComponent(exportUrl)}`,
-                            `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(exportUrl)}`
-                        ];
-                        
-                        let textData = null;
-                        let lastError = null;
-                        
-                        for (const proxyUrl of proxies) {
-                            try {
-                                const response = await fetch(proxyUrl);
-                                if (response.ok) {
-                                    textData = await response.text();
-                                    break; // Success!
-                                }
-                            } catch (err) {
-                                lastError = err;
-                                // Ignore and try next proxy
-                            }
-                        }
-                        
-                        if (textData) {
-                            content = textData.replace(/^\uFEFF/, '').trim();
-                            window.Yoru.UI.toast('Google Docs text extracted!', 'success');
-                        } else {
-                            submitBtn.innerText = originalBtnText;
-                            submitBtn.disabled = false;
-                            window.Yoru.UI.toast('Failed to fetch via all proxies. Check link permissions.', 'error');
-                            console.error(lastError);
-                            return; // Stop submission
-                        }
-                    }
-                }
                 
                 submitBtn.innerText = 'Saving...';
                 submitBtn.disabled = true;
