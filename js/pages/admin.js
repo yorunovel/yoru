@@ -202,25 +202,72 @@ window.Yoru.Pages.Admin = {
                     window.Yoru.UI.toast('Extracting EPUB...', 'info');
                     const zip = await JSZip.loadAsync(file);
                     
-                    const htmlFiles = Object.keys(zip.files).filter(name => name.endsWith('.html') || name.endsWith('.xhtml'));
-                    htmlFiles.sort();
+                    let rootFile = '';
+                    // 1. Find OPF in container.xml
+                    const containerXml = await zip.file('META-INF/container.xml')?.async("string");
+                    if (containerXml) {
+                        const containerDoc = new DOMParser().parseFromString(containerXml, 'text/xml');
+                        const rootfileNode = containerDoc.querySelector('rootfile');
+                        if (rootfileNode) {
+                            rootFile = rootfileNode.getAttribute('full-path');
+                        }
+                    }
+                    
+                    let htmlFilesToRead = [];
+                    
+                    // 2. Parse OPF to get reading order
+                    if (rootFile && zip.file(rootFile)) {
+                        const rootPathPrefix = rootFile.includes('/') ? rootFile.substring(0, rootFile.lastIndexOf('/') + 1) : '';
+                        const opfXml = await zip.file(rootFile).async("string");
+                        const opfDoc = new DOMParser().parseFromString(opfXml, 'text/xml');
+                        
+                        // Map id -> href
+                        const manifest = {};
+                        opfDoc.querySelectorAll('manifest > item').forEach(item => {
+                            manifest[item.getAttribute('id')] = item.getAttribute('href');
+                        });
+                        
+                        // Follow spine
+                        opfDoc.querySelectorAll('spine > itemref').forEach(itemref => {
+                            const idref = itemref.getAttribute('idref');
+                            if (manifest[idref]) {
+                                let href = manifest[idref];
+                                // URL decode href in case it has %20
+                                href = decodeURIComponent(href);
+                                htmlFilesToRead.push(rootPathPrefix + href);
+                            }
+                        });
+                    }
+                    
+                    // Fallback to alphabetical if OPF failed
+                    if (htmlFilesToRead.length === 0) {
+                        htmlFilesToRead = Object.keys(zip.files).filter(name => name.endsWith('.html') || name.endsWith('.xhtml'));
+                        htmlFilesToRead.sort();
+                    }
                     
                     let textContent = '';
-                    for (const name of htmlFiles) {
+                    
+                    for (const name of htmlFilesToRead) {
+                        if (!zip.file(name)) continue;
+                        
                         const htmlString = await zip.file(name).async("string");
                         const doc = new DOMParser().parseFromString(htmlString, 'text/html');
                         
-                        // Extract text nicely, keeping paragraphs
-                        const paragraphs = Array.from(doc.body.querySelectorAll('p, div, h1, h2, h3, h4'))
-                            .map(el => el.textContent.trim())
-                            .filter(text => text.length > 0);
-                            
-                        if (paragraphs.length > 0) {
-                            textContent += paragraphs.join('\n\n') + '\n\n';
-                        } else {
-                            // Fallback if no specific tags
-                            textContent += doc.body.textContent.trim() + '\n\n';
-                        }
+                        // Remove scripts and styles
+                        doc.querySelectorAll('script, style').forEach(el => el.remove());
+                        
+                        // Flatten block elements to newlines
+                        doc.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li, br, hr').forEach(el => {
+                            el.insertAdjacentText('beforebegin', '\n\n');
+                            el.insertAdjacentText('afterend', '\n\n');
+                        });
+                        
+                        // Extract text content and normalize spaces
+                        let text = doc.body ? doc.body.textContent : doc.documentElement.textContent;
+                        text = text.replace(/^[ \t]+/gm, ''); // remove leading spaces on each line
+                        text = text.replace(/\n{3,}/g, '\n\n'); // replace 3+ newlines with 2 newlines
+                        
+                        textContent += text.trim() + '\n\n';
                     }
                     
                     document.getElementById('chapter-content').value = textContent.trim();
