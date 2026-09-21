@@ -19,7 +19,11 @@ Yoru.Pages.Dashboard = {
     // Extract unique genres for dropdown
     var genres = new Set();
     Yoru.Pages.Dashboard.allNovels.forEach(n => {
-      if (n.genre) n.genre.forEach(g => genres.add(g));
+      if (Array.isArray(n.genre)) {
+        n.genre.forEach(g => genres.add(g));
+      } else if (typeof n.genre === 'string') {
+        genres.add(n.genre);
+      }
     });
     var genreOptions = ['All'].concat(Array.from(genres).sort());
     
@@ -112,20 +116,20 @@ Yoru.Pages.Dashboard = {
     if (filterBar) {
       filterBar.innerHTML = Yoru.UI.renderFilterPills(author);
     }
-    this.applyFilters();
+    Yoru.Pages.Dashboard.applyFilters();
   },
   
   filterByGenre: function(genre) {
     Yoru.Pages.Dashboard.currentGenre = genre;
-    this.applyFilters();
+    Yoru.Pages.Dashboard.applyFilters();
   },
   
   filterBySearch: function(query) {
     Yoru.Pages.Dashboard.searchQuery = query;
-    this.applyFilters();
+    Yoru.Pages.Dashboard.applyFilters();
   },
 
   afterRender: function() {
-    this.applyFilters();
+    Yoru.Pages.Dashboard.applyFilters();
   }
 };
